@@ -1,12 +1,6 @@
 // Acquire VS Code API exactly once (avoid repeated acquisition errors)
 const vscode = acquireVsCodeApi()
 
-// try {
-//   vscode = acquireVsCodeApi()
-// } catch(_) {
-//   // Ignore if already acquired (e.g., hot reload scenarios)
-// }
-
 document.addEventListener("DOMContentLoaded", event => main(event))
 
 /**
@@ -32,8 +26,6 @@ function main(_event) {
           break
         case "error":
           console.error(message)
-          // document.getElementById('validationResults').innerHTML =
-          //   '<div class="error">Error: ' + message.message + '</div>';
           break
         case "focusFilter":
           {
@@ -107,8 +99,6 @@ function main(_event) {
       return
 
     if(selectedFile.error) {
-      console.error("###", "We got an error!")
-
       setError(selectedFile.error)
 
       return

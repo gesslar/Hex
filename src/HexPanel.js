@@ -362,7 +362,7 @@ export default class HexPanel {
   }
 
   async #jumpToProperty({property}) {
-    if(!property || !this.#selectFile)
+    if(!property || !this.#selectedFile)
       return
 
     try {
