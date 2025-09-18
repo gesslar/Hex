@@ -1,0 +1,126 @@
+{
+  "name": "@gesslar/hex",
+  "displayName": "Hex",
+  "description": "Because while you may be valid, your theme is questionable.",
+  "version": "0.0.1",
+  "publisher": "gesslar",
+  "engines": {
+    "vscode": ">=1.104.0"
+  },
+  "repository": "https://github.com/gesslar/Hex",
+  "categories": [
+    "Other",
+    "Themes"
+  ],
+  "main": "./src/silly-required-cjs-entrypoint.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hex.extract",
+        "title": "Hex: Extract"
+      },
+      {
+        "command": "hex.selectFile",
+        "title": "Select JSON File",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "hex.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "Hex",
+          "title": "Hex",
+          "icon": "$(symbol-color)"
+        }
+      ]
+    },
+    "views": {
+      "Hex": [
+        {
+          "icon": "$(symbol-color)",
+          "id": "hex.panel",
+          "name": "Validator",
+          "type": "webview",
+          "contextualTitle": "Hex"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "hex.selectFile",
+          "when": "view == hex.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hex.refresh",
+          "when": "view == hex.panel",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "configuration": {
+      "properties": {
+        "hex.extractMode": {
+          "type": "string",
+          "enum": [
+            "console",
+            "file",
+            "clipboard"
+          ],
+          "enumDescriptions": [
+            "Log to console only",
+            "Save to configured output path",
+            "Copy to clipboard"
+          ],
+          "default": "clipboard",
+          "markdownDescription": "How to extract the schema. If set to `file`, requires [Output Path](#hex.outputPath) to be set."
+        },
+        "hex.outputFormat": {
+          "type": "string",
+          "enum": [
+            "json5",
+            "yaml"
+          ],
+          "enumDescriptions": [
+            "JSON5 format",
+            "YAML format"
+          ],
+          "default": "yaml",
+          "description": "Output format for extracted schema."
+        },
+        "hex.outputPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path where extracted schema should be written (requires [Extract Mode](#hex.extractMode) as `file`)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "pretest": "echo 'No build step needed for ESM JS'",
+    "test": "echo 'No tests yet'",
+    "update": "npx npm-check-updates -u && npm install"
+  },
+  "devDependencies": {
+    "@stylistic/eslint-plugin": "^5.3.1",
+    "@types/vscode": "^1.104.0",
+    "eslint": "^9.35.0",
+    "eslint-plugin-jsdoc": "^59.0.1",
+    "globals": "^16.4.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@vscode-elements/elements": "^2.3.1",
+    "@vscode/codicons": "^0.0.40",
+    "ajv": "^8.17.1",
+    "json5": "^2.2.3",
+    "npm": "^11.6.0",
+    "yaml": "^2.8.1"
+  }
+}

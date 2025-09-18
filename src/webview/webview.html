@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none';
+                 style-src {{CSP_SOURCE}} 'unsafe-inline';
+                 script-src {{CSP_SOURCE}} 'unsafe-inline';
+                 font-src {{CSP_SOURCE}} 'unsafe-inline';
+                 connect-src https:;">
+  <title>Workbench Colors</title>
+  <link rel="stylesheet" href="{{CSS_URI}}" />
+  <link rel="stylesheet" href="{{CODEICON_URI}}" id="vscode-codicon-stylesheet" />
+  <script src="{{VSCODE_ELEMENTS_URI}}" type="module" defer></script>
+  <script src="{{SCRIPT_URI}}" type="module" defer></script>
+
+</head>
+
+<body>
+
+  <header>
+
+    <section file>
+      <vscode-checkbox id="showOnlyErrors" label="Show only errors" value="testvalue1" onchange="toggleErrorsOnly()"
+        toggle checked>
+      </vscode-checkbox>
+    </section>
+  </header>
+
+  <main>
+    <section no-file>
+      <vscode-label id="selectedFile">
+        Open a <tt>color-theme.json</tt> file via the folder icon in the toolbar.
+      </vscode-label>
+    </section>
+
+    <section id="selectedFileSection" file>
+
+      <div>
+        <vscode-label id="errorLabel">
+          <span class="error noError" id="errorText">
+            <!-- error text goes here -->
+          </span>
+        </vscode-label>
+      </div>
+
+      <section id="selectedFileInformation">
+        <div id="filePath"></div>
+        <div id="properties"><span id="propertyCount"></span> color properties found</div>
+        <div id="coverage">
+          <span id="coveragePercent"></span>&percnt; coverage of <span id="totalProperties"></span> available properties
+        </div>
+      </section>
+
+      <hr file />
+
+    </section>
+
+    <section file>
+      <section id="validationResultsHeader">
+        <p>
+          Validation Results
+          <span id="invalidCount" class="badge invalid hidden" aria-live="polite">0</span>
+        </p>
+        <p>
+          <vscode-textfield placeholder="Filter by property name..." id="propertyFilter" onkeyup="filterByProperty()">
+          </vscode-textfield>
+        </p>
+      </section>
+      <section id="validationResults">
+
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://code.visualstudio.com/api/references/theme-color" class="docs-link"
+      title="Open Theme Color Documentation in your browser">
+      Theme Color Documentation
+    </a>
+  </footer>
+
+  <template id="validation-item-template">
+    <div class="validation-item">
+      <div class="validation-property"></div>
+      <div class="schema-description"></div>
+      <div class="validation-value"></div>
+      <div class="validation-description"></div>
+    </div>
+  </template>
+
+</body>
+
+</html>
