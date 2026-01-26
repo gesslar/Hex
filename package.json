@@ -108,7 +108,7 @@
     "update": "npx npm-check-updates -u && npm install"
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^5.7.0",
+    "@stylistic/eslint-plugin": "^5.7.1",
     "@types/vscode": "^1.108.1",
     "eslint": "^9.39.2",
     "eslint-plugin-jsdoc": "^62.3.1",
