@@ -112,7 +112,7 @@
     "@types/vscode": "^1.108.1",
     "eslint": "^9.39.2",
     "eslint-plugin-jsdoc": "^62.4.1",
-    "globals": "^17.1.0"
+    "globals": "^17.2.0"
   },
   "type": "module",
   "dependencies": {
