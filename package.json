@@ -109,7 +109,7 @@
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.7.1",
-    "@types/vscode": "^1.108.1",
+    "@types/vscode": "^1.109.0",
     "eslint": "^9.39.2",
     "eslint-plugin-jsdoc": "^62.5.0",
     "globals": "^17.3.0"
