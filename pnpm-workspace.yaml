@@ -1,0 +1,4 @@
+onlyBuiltDependencies:
+  - node-sass
+  - keytar
+  - "@vscode/vsce-sign"

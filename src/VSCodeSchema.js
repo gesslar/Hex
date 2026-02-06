@@ -73,6 +73,13 @@ export default class VSCodeSchema {
         })
 
         work.oneOf = oneOf
+
+        for(const el of oneOf) {
+          if(el.deprecationMessage) {
+            work.deprecationMessage = el.deprecationMessage
+            break
+          }
+        }
       }
 
       // Derive alpha requirement by executing patterns rather than brittle string inspection

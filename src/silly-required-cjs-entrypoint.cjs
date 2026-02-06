@@ -1,3 +1,4 @@
+// src/silly-required-cjs-entrypoint.cjs
 // CommonJS wrapper for ESM extension logic
 // This file is the entry point for VS Code (see package.json "main")
 

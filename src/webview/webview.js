@@ -1,6 +1,6 @@
 const vscode = acquireVsCodeApi()
 
-import {DisposerClass, HTML, Notify, NotifyClass, Promised} from "./vendor/toolkit-3.31.0.js"
+import {DisposerClass, HTML, Notify, NotifyClass, Promised, Util} from "./vendor/toolkit-3.31.0.js"
 const {setState, getState} = vscode
 
 // eslint-disable-next-line no-unused-vars
@@ -8,37 +8,12 @@ const testOk = "badge.foreground", testErr = "window.activeBorder"
 
 /** @import {ValidationResult} from "../VSCodeSchema.js" */
 
-const ErrorsOnly = Object.freeze({
-  TRUE: "Show Me Only The Errors",
-  FALSE: "Nah Fam Show Me Everything",
-})
-
-const UseRegex = Object.freeze({
-  TRUE: "Regex Up In Here",
-  FALSE: "Nah, It's all Loosey Goosey"
-})
-
-const MatchCase = Object.freeze({
-  TRUE: "Bananas in Pajamas",
-  FALSE: "Are Walking Down The Stairs"
-})
-
 class WebHex {
   #lastValidationResults = null
   #validationElements = new Map()
   #disposer
   #notify
   #elements = {}
-  #elementIds = [
-    "coveragePercent",
-    "errorText",
-    "filePath",
-    "propertyCount",
-    "propertyFilter",
-    "totalProperties",
-    "validation-item-template",
-    "validationResults",
-  ]
   #filterRegex
 
   #clickFunction = evt => this.#validationElementClick(evt)
@@ -48,13 +23,12 @@ class WebHex {
     this.#disposer = new DisposerClass()
     this.#notify = new NotifyClass()
 
-    this.#elementIds.forEach(e => {
-      const element = document.getElementById(e)
-      if(!element)
-        throw new Error(`Missing '${e}'`)
-
-      this.#elements[e] = element
-    })
+    // Find everything that has an id and register it for easy use!
+    document.querySelectorAll("*[id]")
+      .forEach(e => {
+        e.dataset.elementName = toCamelCase(e.id)
+        this.#elements[e.dataset.elementName] = e
+      })
 
     // But, we need a disposer for the clicking so we can free them up, whenever
     // we do the thing.
@@ -66,17 +40,33 @@ class WebHex {
     Notify.on("message", evt => this.#onMessage(evt))
     Notify.on("data:received", evt => this.#processIncomingData(evt))
     Notify.on("error:received", evt => this.#processIncomingError(evt))
-    Notify.on("find-input", evt => this.#onFilterChange(evt), this.#elements.propertyFilter)
+    Notify.on("input", evt => this.#handleFilterChange(evt), this.#elements.filterText)
+    Notify.on("click", evt => this.#handleClearAllClick(evt), this.#elements.clearAll)
+    Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.matchCase)
+    Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.useRegex)
+    Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.errorsOnly)
+    Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.warningsOnly)
+
+    this.#setHasFile(false)
 
     vscode.postMessage({type: "ready"})
   }
 
   #restoreSession(state) {
-    const {errorsOnly = ErrorsOnly.FALSE, filterText = ""} = state
+    const {
+      errorsOnly = "",
+      filterText = "",
+      useRegex = "",
+      matchCase = "",
+    } = state
 
-    const propertyFilter = this.#elements.propertyFilter
-    propertyFilter.value = filterText
-    propertyFilter.errorsOnly = errorsOnly === ErrorsOnly.TRUE
+    this.#elements.filterText.value = filterText
+    this.#elements.errorsOnly.dataset.active = errorsOnly
+    errorsOnly && this.#elements.errorsOnly.classList.toggle("active")
+    this.#elements.useRegex.dataset.active = useRegex
+    useRegex && this.#elements.useRegex.classList.toggle("active")
+    this.#elements.matchCase.dataset.active = matchCase
+    matchCase && this.#elements.matchCase.classList.toggle("active")
 
     const {selectedFile, validationResults} = state
 
@@ -130,7 +120,7 @@ class WebHex {
   }
 
   #processIncomingError(evt) {
-    console.error(evt)
+    this.#setError(evt.message)
   }
 
   /**
@@ -175,29 +165,45 @@ class WebHex {
     errorText.classList.toggle("noError")
   }
 
+  #updateErrors(items) {
+    const text = this.#elements.errorCount
+    const button = this.#elements.errorsOnly
+    const num = items.length
+
+    text.textContent = num
+    button.classList.toggle("has-errors", num > 0)
+    button.title = `${num} ${num === 1 ? "error" : "errors"} - click to filter`
+  }
+
+  #updateWarnings(items) {
+    const text = this.#elements.warningCount
+    const button = this.#elements.warningsOnly
+    const num = items.length
+
+    text.textContent = num
+    button.classList.toggle("has-warnings", num > 0)
+    button.title = `${num} ${num === 1 ? "warning" : "warning"} - click to filter`
+  }
+
   /**
    * Handle filter changes from the FindWidget component.
    *
    * @param {CustomEvent} evt - The find-input event
    */
-  #onFilterChange(evt) {
+  #handleFilterChange(_evt) {
+    const filterText = this.#elements.filterText.value
+
+    this.#save({filterText})
+
     const {
-      value: filterText,
-      errorsOnly,
+      filterText: value,
       useRegex,
       matchCase
-    } = evt.detail ?? {}
+    } = getState() ?? {}
 
-    this.#save({
-      filterText,
-      errorsOnly: errorsOnly ? ErrorsOnly.TRUE : ErrorsOnly.FALSE,
-      useRegex: useRegex ? UseRegex.TRUE : UseRegex.FALSE,
-      matchCase: matchCase ? MatchCase.TRUE : MatchCase.FALSE,
-    })
-
-    if(filterText) {
-      if(useRegex === UseRegex.TRUE) {
-        if(matchCase === MatchCase.TRUE) {
+    if(value) {
+      if(useRegex) {
+        if(matchCase) {
           this.#filterRegex = new RegExp(filterText)
         } else {
           this.#filterRegex = new RegExp(filterText, "i")
@@ -208,6 +214,27 @@ class WebHex {
     }
 
     this.#applyFilter()
+  }
+
+  #handleClearAllClick(_evt) {
+    this.#elements.filterText.value = ""
+    this.#handleFilterChange()
+  }
+
+  #handleFilterCriterionClick(evt) {
+    const element = evt.currentTarget
+    const elementName = element.dataset.elementName
+    const newValue = element.dataset.active === elementName
+      ? ""
+      : elementName
+
+    console.log("bmw", evt.target)
+
+    element.dataset.active = newValue
+    element.classList.toggle("active")
+
+    this.#save({[elementName]: newValue})
+    this.#handleFilterChange()
   }
 
   async #applyFilter() {
@@ -231,20 +258,30 @@ class WebHex {
 
   #allowShow(item) {
     const {
-      errorsOnly = ErrorsOnly.FALSE,
+      warningsOnly = "",
+      errorsOnly = "",
       filterText = "",
-      useRegex = UseRegex.FALSE,
-      matchCase = MatchCase.FALSE,
+      useRegex = "",
+      matchCase = "",
     } = getState() ?? {}
 
-    if(errorsOnly === ErrorsOnly.TRUE && item.status !== "invalid")
-      return false
+    if(errorsOnly || warningsOnly) {
+      if(errorsOnly && warningsOnly) {
+        if(item.status !== "invalid" && item.status !== "warn") {
+          return false
+        }
+      } else if(errorsOnly && item.status !== "invalid") {
+        return false
+      } else if(warningsOnly && item.status !== "warn") {
+        return false
+      }
+    }
 
     if(filterText) {
-      if(useRegex == UseRegex.TRUE) {
+      if(useRegex) {
         return this.#filterRegex.test(item.property)
       } else {
-        if(matchCase === MatchCase.TRUE) {
+        if(matchCase) {
           return item.property.includes(filterText)
         } else {
           return item.property.toLowerCase().includes(filterText.toLowerCase())
@@ -292,10 +329,12 @@ class WebHex {
         return
 
       const container = this.#elements.validationResults
-      const invalidItems = validationResults.filter(r => r.status === "invalid")
 
-      // Update error count on the FindWidget
-      this.#elements.propertyFilter.errorCount = invalidItems.length
+      const invalidItems = validationResults.filter(r => r.status === "invalid")
+      this.#updateErrors(invalidItems)
+
+      const warningItems = validationResults.filter(r => r.status === "warn")
+      this.#updateWarnings(warningItems)
 
       // Refreshing! Mwah!
       this.#disposer.dispose()
@@ -318,6 +357,9 @@ class WebHex {
         if(entry.status === "invalid")
           entryElement.classList.add("invalid")
 
+        if(entry.status === "warn")
+          entryElement.classList.add("warn")
+
         /** @type {HTMLDivElement} */
         const propEl = entryElement.querySelector(".validation-property")
         propEl.textContent = entry.property
@@ -325,7 +367,7 @@ class WebHex {
 
         /** @type {HTMLDivElement} */
         const schemaDescEl = entryElement.querySelector(".schema-description")
-        schemaDescEl.textContent = entry.schemaDescription ?? ""
+        schemaDescEl.textContent = entry.description ?? ""
 
         /** @type {HTMLDivElement} */
         const valueEl = entryElement.querySelector(".validation-value")
@@ -334,10 +376,11 @@ class WebHex {
 
         /** @type {HTMLDivElement} */
         const descEl = entryElement.querySelector(".validation-description")
-        descEl.textContent = entry.description
+        descEl.textContent = entry.message ?? ""
         descEl.classList.add(entry.status)
 
         this.#disposer.register(this.#notify.on("click", this.#clickFunction, entryElement))
+
         this.#validationElements.set(entry.property, [entry, entryElement])
 
         const allowedToShow = this.#allowShow(entry)
@@ -372,6 +415,25 @@ class WebHex {
       }
     }
   }
+}
+
+function toCamelCase(string) {
+  if(/[-_ #$]/.test(string))
+    return string
+      .split(/[-_ #$]/)
+      .map(a => a.trim())
+      .filter(Boolean)
+      .map(a => a
+        .split("")
+        .filter(b => /[\w]/.test(b))
+        .filter(Boolean)
+        .join("")
+      )
+      .map(a => a.toLowerCase())
+      .map((a, i) => i === 0 ? a : Util.capitalize(a))
+      .join("")
+
+  return string
 }
 
 Notify.on("DOMContentLoaded", () => new WebHex())
