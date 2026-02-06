@@ -154,7 +154,7 @@ export default class HexPanel {
           this.#webviewView = null
           this.#sessionId = null
 
-        }, null, context.subscribers
+        }, null, context.subscriptions
       )
 
       this.#webviewView.onDidChangeViewState(_ => {
@@ -364,7 +364,12 @@ export default class HexPanel {
     } catch(error) {
       this.#glog.error(error.stack)
 
-      return "<div class=\"error\">Error loading webview content: " + error.message + "</div>"
+      const safe = error.message
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+
+      return `<div class="error">Error loading webview content: ${safe}</div>`
     }
   }
 
@@ -431,13 +436,13 @@ export default class HexPanel {
           pos.translate(0, property.length)
         )
       } else {
-        this.#processMessage(
-          "showError",
-          `'${property}' not found in file ${this.#selectedFile}`
-        )
+        this.#processMessage({
+          "type": "showError",
+          message: `'${property}' not found in file ${this.#selectedFile}`
+        })
       }
     } catch(error) {
-      window.showErrorMessage(error.message, 3_000)
+      window.showErrorMessage(error.message)
       // Ignore reveal errors
     }
   }
@@ -496,7 +501,7 @@ export default class HexPanel {
       case "showError":
         message.message
         &&
-        window.showErrorMessage(message.message, 3_000)
+        window.showErrorMessage(message.message)
         break
       case "jumpToProperty":
         message.property && await this.#jumpToProperty(message)
@@ -518,9 +523,9 @@ export default class HexPanel {
           )
         } catch(error) {
           this.#glog.error(error)
-        } finally {
-          break
         }
+
+        break
     }
   }
 
