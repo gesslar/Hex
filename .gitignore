@@ -4,3 +4,4 @@ out/
 *.vsix
 temp/
 .vscode/
+work/

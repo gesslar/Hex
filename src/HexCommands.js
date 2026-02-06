@@ -11,8 +11,8 @@ import VSCodeSchema from "./VSCodeSchema.js"
 export default class HexCommands {
   #schema = null
 
-  constructor(schema) {
-    this.#schema = schema
+  async showWebview(context, webviewProvider) {
+    webviewProvider.showWebview(context)
   }
 
   async extract() {

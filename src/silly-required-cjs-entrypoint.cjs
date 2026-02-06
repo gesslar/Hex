@@ -9,9 +9,8 @@ let esm
  * @returns {Promise<any>} The imported ESM module.
  */
 async function ensureESM() {
-  if(!esm) {
+  if(!esm)
     esm = await import("./Hex.js")
-  }
 
   return esm
 }
