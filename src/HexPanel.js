@@ -170,27 +170,6 @@ export default class HexPanel {
         this.#context.subscriptions
       )
 
-      // // Restore state if available
-      // webviewView.onDidChangeVisibility(async() => {
-      //   try {
-      //     if(webviewView.visible) {
-      //       // Webview became visible, refresh data
-      //       await this.#updateData()
-      //       if(this.#selectedFile)
-      //         this.#setupFileWatcher()
-      //     } else {
-      //       if(this.#selectedFileWatcher) {
-      //         this.#selectedFileWatcher.dispose()
-      //         this.#selectedFileWatcher = null
-      //       }
-      //     }
-      // } catch(error) {
-      // this.#glog.error(error)
-      //   }
-      // })
-
-      // Initial data load
-      // await this.#updateData()
     } catch(error) {
       this.#glog.error(error)
     }
@@ -204,7 +183,7 @@ export default class HexPanel {
           canSelectFolders: false,
           canSelectMany: false,
           filters: {
-            "VS Code Theme": ["color-theme.json"]
+            "VS Code Theme": ["json"]
           },
           defaultUri: workspace.workspaceFolders?.[0]?.uri
         })

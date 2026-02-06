@@ -13,10 +13,10 @@
  *
  * @typedef {object} ValidationResult
  * @property {string} property - The property key that was validated
- * @property {"valid"|"invalid"} status - Whether the property passed validation
- * @property {string} description - Success description or error message
+ * @property {"valid"|"warn"|"invalid"} status - Whether the property passed validation
+ * @property {string} description - Schema description of the color property
  * @property {string} value - The color value that was validated
- * @property {string} [schemaDescription] - Schema description when validation fails
+ * @property {string} [message] - Error or deprecation message when status is not "valid"
  */
 
 /**
@@ -41,6 +41,7 @@
  * @typedef {object} PropertySchema
  * @property {string} [description] - Description of the color property
  * @property {SchemaPatternOption[]} [oneOf] - Array of pattern options to validate against
+ * @property {string} [deprecationMessage] - Deprecation message if property is deprecated
  */
 
 /**
@@ -67,23 +68,27 @@ export default class Validator {
           const validationResult =
             this.#validateColorProperty(key, value, propertySchema)
 
+          const isDeprecated = !!propertySchema.deprecationMessage
+
           results.push({
             property: key,
-            status: validationResult.isValid ? "valid" : "invalid",
-            description: validationResult.isValid
-              ? propertySchema.description || "No description available"
-              : validationResult.error,
+            status: isDeprecated ? "warn"
+              : validationResult.isValid ? "valid"
+              : "invalid",
+            description: propertySchema.description || "No description available",
             value: value,
-            schemaDescription: validationResult.isValid
-              ? undefined
-              : propertySchema.description
+            message: isDeprecated
+              ? propertySchema.deprecationMessage
+              : validationResult.isValid ? undefined
+              : validationResult.error
           })
         } else {
           results.push({
             property: key,
             status: "invalid",
-            description: `Property ${key} is not allowed.`,
-            value: value
+            description: "",
+            value: value,
+            message: `Property ${key} is not allowed.`
           })
         }
       }

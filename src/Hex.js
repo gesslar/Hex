@@ -27,27 +27,19 @@ export async function activate(context) {
     vscode
       .commands
       .registerCommand("hex.show", async() => {
-        // glog.info("doing showWebview")
         await commandProvider.showWebview(context, hexPanel)
-        // glog.info("done showWebview")
       }),
 
     vscode
       .commands
       .registerCommand("hex.select", async() => {
-        // glog.info("doing selectFile")
         await hexPanel.selectFile()
-        // glog.info("done selectFile")
       }),
 
     vscode
       .commands
       .registerCommand("hex.validate", async resourceUri => {
-        // glog.info("doing selectFile")
         await hexPanel.selectFile(resourceUri)
-        // glog.info("done selectFile")
       })
   )
-
-  // vscode.window.registerWebviewPanelSerializer("Hex", hexSerializer)
 }

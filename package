@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cleanup() {
+  echo "Restoring dev environment..."
+  rm -rf node_modules
+  rm -f package-lock.json
+  pnpm install
+}
+
+trap cleanup EXIT
+
+rm -rf node_modules
+npm install --omit=dev
+npx @vscode/vsce package --skip-license
