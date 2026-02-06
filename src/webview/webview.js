@@ -55,6 +55,7 @@ class WebHex {
   #restoreSession(state) {
     const {
       errorsOnly = "",
+      warningsOnly = "",
       filterText = "",
       useRegex = "",
       matchCase = "",
@@ -63,6 +64,8 @@ class WebHex {
     this.#elements.filterText.value = filterText
     this.#elements.errorsOnly.dataset.active = errorsOnly
     errorsOnly && this.#elements.errorsOnly.classList.toggle("active")
+    this.#elements.warningsOnly.dataset.active = warningsOnly
+    warningsOnly && this.#elements.warningsOnly.classList.toggle("active")
     this.#elements.useRegex.dataset.active = useRegex
     useRegex && this.#elements.useRegex.classList.toggle("active")
     this.#elements.matchCase.dataset.active = matchCase
@@ -152,7 +155,7 @@ class WebHex {
       return
 
     if(message === null) {
-      errorText.innerHTML = ""
+      errorText.textContent = ""
       errorText.classList.toggle("noError")
 
       return
@@ -161,7 +164,7 @@ class WebHex {
     if(!message)
       return
 
-    errorText.innerHTML = message
+    errorText.textContent = message
     errorText.classList.toggle("noError")
   }
 
@@ -182,7 +185,7 @@ class WebHex {
 
     text.textContent = num
     button.classList.toggle("has-warnings", num > 0)
-    button.title = `${num} ${num === 1 ? "warning" : "warning"} - click to filter`
+    button.title = `${num} ${num === 1 ? "warning" : "warnings"} - click to filter`
   }
 
   /**
@@ -203,10 +206,14 @@ class WebHex {
 
     if(value) {
       if(useRegex) {
-        if(matchCase) {
-          this.#filterRegex = new RegExp(filterText)
-        } else {
-          this.#filterRegex = new RegExp(filterText, "i")
+        try {
+          if(matchCase) {
+            this.#filterRegex = new RegExp(filterText)
+          } else {
+            this.#filterRegex = new RegExp(filterText, "i")
+          }
+        } catch {
+          // simply won't match
         }
       } else {
         this.#filterRegex = undefined

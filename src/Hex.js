@@ -24,6 +24,9 @@ export async function activate(context) {
   )
 
   context.subscriptions.push(
+    hexPanel,
+    commandProvider,
+
     vscode
       .commands
       .registerCommand("hex.show", async() => {

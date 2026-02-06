@@ -73,7 +73,7 @@ export default class HexCommands {
       throw new Error("Missing file path for file export.")
 
     const exported = await this.#prepareExport(format)
-    const fileName = `${destPath}WorkbenchColors.${format}`
+    const fileName = vscode.Uri.joinPath(destPath, `WorkbenchColors.${format}`)
     const destination = this.#resolvePath(fileName)
 
     // Can we write?
