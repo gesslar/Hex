@@ -1,55 +1,162 @@
-// Acquire VS Code API exactly once (avoid repeated acquisition errors)
 const vscode = acquireVsCodeApi()
 
-document.addEventListener("DOMContentLoaded", event => main(event))
+import {DisposerClass, HTML, Notify, NotifyClass, Promised} from "./vendor/toolkit-3.31.0.js"
+const {setState, getState} = vscode
 
-/**
- * Main entry point.
- *
- * @param {event} _event - The event of this document having loaded.
- */
-function main(_event) {
-  let lastValidationResults = null
-  let suppressAnimation = false
-  let autoExpanding = false
+// eslint-disable-next-line no-unused-vars
+const testOk = "badge.foreground", testErr = "window.activeBorder"
 
-  setHasFile(false)
+/** @import {ValidationResult} from "../VSCodeSchema.js" */
 
-  window.addEventListener("message", event => {
+const ErrorsOnly = Object.freeze({
+  TRUE: "Show Me Only The Errors",
+  FALSE: "Nah Fam Show Me Everything",
+})
+
+const UseRegex = Object.freeze({
+  TRUE: "Regex Up In Here",
+  FALSE: "Nah, It's all Loosey Goosey"
+})
+
+const MatchCase = Object.freeze({
+  TRUE: "Bananas in Pajamas",
+  FALSE: "Are Walking Down The Stairs"
+})
+
+class WebHex {
+  #lastValidationResults = null
+  #validationElements = new Map()
+  #disposer
+  #notify
+  #elements = {}
+  #elementIds = [
+    "coveragePercent",
+    "errorText",
+    "filePath",
+    "propertyCount",
+    "propertyFilter",
+    "totalProperties",
+    "validation-item-template",
+    "validationResults",
+  ]
+  #filterRegex
+
+  #clickFunction = evt => this.#validationElementClick(evt)
+  #log = msg => vscode.postMessage({type: "log", msg})
+
+  constructor() {
+    this.#disposer = new DisposerClass()
+    this.#notify = new NotifyClass()
+
+    this.#elementIds.forEach(e => {
+      const element = document.getElementById(e)
+      if(!element)
+        throw new Error(`Missing '${e}'`)
+
+      this.#elements[e] = element
+    })
+
+    // But, we need a disposer for the clicking so we can free them up, whenever
+    // we do the thing.
+    this.#disposer.register(
+      this.#notify.on("click", evt => this.#validationElementClick(evt), document)
+    )
+
+    // Global notify!
+    Notify.on("message", evt => this.#onMessage(evt))
+    Notify.on("data:received", evt => this.#processIncomingData(evt))
+    Notify.on("error:received", evt => this.#processIncomingError(evt))
+    Notify.on("find-input", evt => this.#onFilterChange(evt), this.#elements.propertyFilter)
+
+    vscode.postMessage({type: "ready"})
+  }
+
+  #restoreSession(state) {
+    const {errorsOnly = ErrorsOnly.FALSE, filterText = ""} = state
+
+    const propertyFilter = this.#elements.propertyFilter
+    propertyFilter.value = filterText
+    propertyFilter.errorsOnly = errorsOnly === ErrorsOnly.TRUE
+
+    const {selectedFile, validationResults} = state
+
+    if(selectedFile && validationResults) {
+      const message = {detail: {selectedFile, validationResults}}
+
+      this.#processIncomingData(message)
+    }
+  }
+
+  #save(ob) {
+    setState({...getState(), ...ob})
+  }
+
+  #onMessage(event) {
     try {
       const message = event.data
 
       switch(message.type) {
-        case "dataUpdated":
-          updateSelectedFile(message.selectedFile)
-          updateValidationResults(message.validationResults)
+        case "validationResults":
+          this.#notify.emit("data:received", message)
           break
         case "error":
-          console.error(message)
+          this.#notify.emit("error:received", message)
           break
-        case "focusFilter":
-          {
-            const input = document.getElementById("propertyFilter")
+        case "setSessionId":
+          const previousState = getState() ?? {}
+          const {sessionId: previousSessionId} = previousState
+          const {sessionId} = message
 
-            if(input) {
-              input.focus()
-              input.select()
-            }
+          if(sessionId === previousSessionId) {
+            this.#restoreSession(previousState)
+          } else {
+            this.#setHasFile(false)
+            setState({sessionId})
+            vscode.postMessage({type: "requestData"})
           }
+
           break
       }
     } catch(error) {
+      this.#log(error.message)
       console.error(error)
     }
-  })
+  }
+
+  #processIncomingData({detail}) {
+    this.#save(detail)
+    this.#updateStatistics(detail.selectedFile)
+    this.#updateValidationDisplay(detail.validationResults)
+  }
+
+  #processIncomingError(evt) {
+    console.error(evt)
+  }
+
+  /**
+   * Set UI to show either the selected file view or the no-file placeholder.
+   *
+   * @param {boolean} hasFile - true if a file is currently selected
+   */
+  #setHasFile(hasFile=false) {
+    // Hide all no-file elements when we have a file
+    document.querySelectorAll("[no-file]").forEach(el =>
+      el.toggleAttribute("hidden", hasFile)
+    )
+
+    // Hide all file elements when we don't have a file
+    document.querySelectorAll("[file]").forEach(el =>
+      el.toggleAttribute("hidden", !hasFile)
+    )
+  }
 
   /**
    * Set an error message or clear it.
    *
    * @param {string|null} message - The message to display. Null to clear.
    */
-  function setError(message) {
-    const errorText = document.getElementById("errorText")
+  #setError(message) {
+    const errorText = this.#elements.errorText
 
     if(!errorText)
       return
@@ -67,274 +174,187 @@ function main(_event) {
     errorText.innerHTML = message
     errorText.classList.toggle("noError")
   }
+
   /**
-   * Re-render the existing validation results with current data but new filter
+   * Handle filter changes from the FindWidget component.
    *
+   * @param {CustomEvent} evt - The find-input event
    */
-  function toggleErrorsOnly() {
-    suppressAnimation = true
-    updateValidationResults(lastValidationResults)
-    suppressAnimation = false
+  #onFilterChange(evt) {
+    const {
+      value: filterText,
+      errorsOnly,
+      useRegex,
+      matchCase
+    } = evt.detail ?? {}
+
+    this.#save({
+      filterText,
+      errorsOnly: errorsOnly ? ErrorsOnly.TRUE : ErrorsOnly.FALSE,
+      useRegex: useRegex ? UseRegex.TRUE : UseRegex.FALSE,
+      matchCase: matchCase ? MatchCase.TRUE : MatchCase.FALSE,
+    })
+
+    if(filterText) {
+      if(useRegex === UseRegex.TRUE) {
+        if(matchCase === MatchCase.TRUE) {
+          this.#filterRegex = new RegExp(filterText)
+        } else {
+          this.#filterRegex = new RegExp(filterText, "i")
+        }
+      } else {
+        this.#filterRegex = undefined
+      }
+    }
+
+    this.#applyFilter()
   }
 
-  window.toggleErrorsOnly = toggleErrorsOnly
+  async #applyFilter() {
+    const validationElements = Array.from(this.#validationElements.values())
 
-  /**
-   * Re-render with current data but new filter
-   */
-  function filterByProperty() {
-    suppressAnimation = true
-    updateValidationResults(lastValidationResults)
-    suppressAnimation = false
+    Promised.settle(validationElements.map(async([entry, element]) => {
+      try {
+        const allowedToShow = this.#allowShow(entry)
+
+        if(allowedToShow)
+          element.classList.remove("hidden")
+        else
+          element.classList.add("hidden")
+
+        entry.property === testOk && console.log(element)
+      } catch(error) {
+        console.error(error)
+      }
+    }))
   }
-  window.filterByProperty = filterByProperty
+
+  #allowShow(item) {
+    const {
+      errorsOnly = ErrorsOnly.FALSE,
+      filterText = "",
+      useRegex = UseRegex.FALSE,
+      matchCase = MatchCase.FALSE,
+    } = getState() ?? {}
+
+    if(errorsOnly === ErrorsOnly.TRUE && item.status !== "invalid")
+      return false
+
+    if(filterText) {
+      if(useRegex == UseRegex.TRUE) {
+        return this.#filterRegex.test(item.property)
+      } else {
+        if(matchCase === MatchCase.TRUE) {
+          return item.property.includes(filterText)
+        } else {
+          return item.property.toLowerCase().includes(filterText.toLowerCase())
+        }
+      }
+    }
+
+    return true
+  }
 
   /**
    * A file has been selected, now we need to do the magic! *glitter bae*
    *
-   * @param {object} selectedFile - The file information passed from the back end.
+   * @param {object} message - The file information passed from the back end.
    */
-  function updateSelectedFile(selectedFile) {
+  #updateStatistics(selectedFile) {
     if(!selectedFile)
       return
 
     if(selectedFile.error) {
-      setError(selectedFile.error)
+      this.#setError(selectedFile.error)
 
       return
     }
 
-    setHasFile(true)
-
-    const filePathElement = document.getElementById("filePath")
-
-    if(filePathElement)
-      filePathElement.innerText = selectedFile.path
-
-    const propertyCountElement = document.getElementById("propertyCount")
-
-    if(propertyCountElement)
-      propertyCountElement.innerText = selectedFile.propertyCount || "No"
-
-    const coveragePercentElement = document.getElementById("coveragePercent")
-
-    if(coveragePercentElement)
-      coveragePercentElement.innerText = (
-        (selectedFile.propertyCount/selectedFile.schemaSize)*100.0).toFixed(0) || "0"
-
-    const totalPropertiesElement = document.getElementById("totalProperties")
-
-    if(totalPropertiesElement)
-      totalPropertiesElement.innerText = selectedFile.schemaSize || "an unknown number of"
-
-    try {
-      const validationResultsElement = document.getElementById("validationResults")
-
-      if(!validationResultsElement)
-        throw new Error("Missing 'validationResults'")
-
-      setHasFile(true)
-    } catch(e) {
-      console.error(e)
-    }
-  }
-
-  /**
-   * Set UI to show either the selected file view or the no-file placeholder.
-   *
-   * @param {boolean} hasFile - true if a file is currently selected
-   */
-  function setHasFile(hasFile) {
-  // Hide all no-file elements when we have a file
-    document.querySelectorAll("[no-file]").forEach(el => {
-      el.toggleAttribute("hidden", hasFile)
-    })
-
-    // Hide all file elements when we don't have a file
-    document.querySelectorAll("[file]").forEach(el => {
-      el.toggleAttribute("hidden", !hasFile)
-    })
+    this.#elements.filePath.innerText = selectedFile.path
+    this.#elements.propertyCount.innerText = selectedFile.propertyCount || "No"
+    this.#elements.coveragePercent.innerText = (
+      (selectedFile.propertyCount/selectedFile.schemaSize)*100.0).toFixed(0) || "0"
+    this.#elements.totalProperties.innerText = selectedFile.schemaSize || "an unknown number of"
   }
 
   /**
    * Updates the validationResults element with the data from the back end.
    *
-   * @param {object} result - The validation information from the back end.
+   * @param {Array<ValidationResult>} validationResults - The validation information from the back end.
    */
-  function updateValidationResults(result) {
+  #updateValidationDisplay(validationResults) {
     try {
-      const container = document.getElementById("validationResults")
+      const hasFile = validationResults && validationResults.length > 0
 
-      // Store results globally so toggleErrorsOnly can access them
-      lastValidationResults = result
-
-      const hasFile = result && result.length > 0
-
-      setHasFile(hasFile)
+      this.#setHasFile(hasFile)
 
       if(!hasFile)
         return
 
-      const invalidCountElement = document.getElementById("invalidCount")
+      const container = this.#elements.validationResults
+      const invalidItems = validationResults.filter(r => r.status === "invalid")
 
-      if(!invalidCountElement)
-        throw new Error("Missing 'invalidCount'")
+      // Update error count on the FindWidget
+      this.#elements.propertyFilter.errorCount = invalidItems.length
 
-      const invalidItems = result.filter(r => r.status === "invalid")
-
-      if(invalidItems.length > 0) {
-        invalidCountElement.classList.remove("hidden")
-      } else {
-        invalidCountElement.classList.add("hidden")
-      }
-
-      invalidCountElement.textContent = invalidItems.length
-
-      // Apply filters
-      const showOnlyErrorElement = document.getElementById("showOnlyErrors")
-
-      if(!showOnlyErrorElement)
-        throw new Error("Missing 'showOnlyErrors'")
-
-      const showOnlyErrors = showOnlyErrorElement.checked
-
-      const propertyFilterElement = document.getElementById("propertyFilter")
-
-      if(!propertyFilterElement)
-        throw new Error("Missing 'propertyFilter'")
-
-      const propertyFilter = document.getElementById("propertyFilter").value.toLowerCase()
-
-      // If user is filtering only errors but there are none, auto-expand
-      if(showOnlyErrors && invalidItems.length === 0 && !autoExpanding) {
-        autoExpanding = true
-        showOnlyErrorElement.checked = false
-        // Re-render full list next frame
-        requestAnimationFrame(() => {
-          updateValidationResults(result)
-          autoExpanding = false
-        })
-
-        return
-      }
-
-      let filteredResults = showOnlyErrors ? invalidItems : result
-
-      // Filter by property name if filter text is provided
-      if(propertyFilter) {
-        filteredResults = filteredResults.filter(result =>
-          result.property.toLowerCase().includes(propertyFilter)
-        )
-      }
-
-      const displayResults = filteredResults
+      // Refreshing! Mwah!
+      this.#disposer.dispose()
+      this.#validationElements.clear()
+      HTML.clearHTMLContent(container)
 
       const template = document.getElementById("validation-item-template")
 
-      // Build map of existing items keyed by property for in-place updates
-      const existing = new Map(
-        Array.from(container.querySelectorAll(".validation-item"))
-          .map(node => [node.dataset.prop, node])
-      )
+      Promised.settle(validationResults.map(async entry => {
+        /** @type {HTMLDivElement} */
+        const clone = template.content.cloneNode(true)
+        /** @type {HTMLElement} */
+        const entryElement = clone.querySelector(".validation-item")
 
-      // Track which properties we will show this render
-      const toShow = new Set(displayResults.map(r => r.property))
+        if(!entryElement)
+          return
 
-      // Animate unless this call is from a filter operation
-      const allowAnimate = !suppressAnimation
+        entryElement.dataset.prop = entry.property
 
-      displayResults.forEach((entry, index) => {
-        let root = existing.get(entry.property)
-        let isNew = false
+        if(entry.status === "invalid")
+          entryElement.classList.add("invalid")
 
-        if(!root) {
-          const fragment = template.content.cloneNode(true)
-          const created = fragment.querySelector(".validation-item")
+        /** @type {HTMLDivElement} */
+        const propEl = entryElement.querySelector(".validation-property")
+        propEl.textContent = entry.property
+        propEl.title = "Click to copy property name"
 
-          if(!created)
-            return
+        /** @type {HTMLDivElement} */
+        const schemaDescEl = entryElement.querySelector(".schema-description")
+        schemaDescEl.textContent = entry.schemaDescription ?? ""
 
-          root = created
-          root.dataset.prop = entry.property
-          isNew = true
-        }
+        /** @type {HTMLDivElement} */
+        const valueEl = entryElement.querySelector(".validation-value")
+        valueEl.textContent = entry.value
+        valueEl.classList.add(entry.status)
 
-        const propEl = root.querySelector(".validation-property")
-        const schemaDescEl = root.querySelector(".schema-description")
-        const valueEl = root.querySelector(".validation-value")
-        const descEl = root.querySelector(".validation-description")
+        /** @type {HTMLDivElement} */
+        const descEl = entryElement.querySelector(".validation-description")
+        descEl.textContent = entry.description
+        descEl.classList.add(entry.status)
 
-        if(propEl) {
-          if(propEl.textContent !== entry.property)
-            propEl.textContent = entry.property
+        this.#disposer.register(this.#notify.on("click", this.#clickFunction, entryElement))
+        this.#validationElements.set(entry.property, [entry, entryElement])
 
-          if(!propEl.dataset.bound) {
-            propEl.dataset.bound = "true"
-            propEl.title = "Click to copy property name"
-          }
-        }
+        const allowedToShow = this.#allowShow(entry)
 
-        if(schemaDescEl && schemaDescEl.textContent !== (entry.schemaDescription ?? ""))
-          schemaDescEl.textContent = entry.schemaDescription ?? ""
+        if(!allowedToShow)
+          entryElement.classList.add("hidden")
 
-        if(valueEl) {
-          const oldStatus = valueEl.classList.contains("invalid") ? "invalid" : (valueEl.classList.contains("valid") ? "valid" : null)
-          const valueChanged = valueEl.textContent !== entry.value
-
-          if(valueChanged)
-            valueEl.textContent = entry.value
-
-          if(oldStatus !== entry.status) {
-            valueEl.classList.remove("invalid", "valid")
-            // Force reflow so removing class registers before adding new
-            // (helps some browsers animate)
-            void valueEl.offsetWidth
-            valueEl.classList.add(entry.status)
-          }
-        }
-
-        if(descEl) {
-          const descChanged = descEl.textContent !== entry.description
-
-          if(descChanged)
-            descEl.textContent = entry.description
-
-          if(entry.status === "invalid")
-            descEl.classList.add("invalid")
-          else
-            descEl.classList.remove("invalid")
-        }
-
-        if(isNew) {
-          // Start off-screen for roll-in
-          root.classList.remove("roll-in")
-          container.appendChild(root)
-          if(allowAnimate) {
-            requestAnimationFrame(() => {
-              setTimeout(() => {
-                root.classList.add("roll-in")
-              }, index * 14)
-            })
-          } else {
-            root.classList.add("roll-in")
-          }
-        }
-      })
-
-      // Remove nodes not in current filtered set with dissolve animation
-      existing.forEach((node, prop) => {
-        if(!toShow.has(prop)) {
-          node.remove()
-        }
-      })
-    } catch(e) {
-      console.error(e)
+        container.appendChild(entryElement)
+      }))
+    } catch(error) {
+      console.error(error)
     }
   }
 
   // Delegate click events for property copy
-  document.addEventListener("click", e => {
-    const el = e.target.closest(".validation-item")
+  #validationElementClick(evt) {
+    const el = evt.target.closest(".validation-item")
 
     if(!el)
       return
@@ -351,5 +371,7 @@ function main(_event) {
       // ignore error
       }
     }
-  })
+  }
 }
+
+Notify.on("DOMContentLoaded", () => new WebHex())

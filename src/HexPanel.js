@@ -1,24 +1,39 @@
+import {Data, FileObject} from "@gesslar/toolkit"
+import crypto from "node:crypto"
+import {clearTimeout, setTimeout} from "node:timers"
 import * as vscode from "vscode"
-import path from "node:path"
-import fs from "node:fs/promises"
-import {fileURLToPath} from "node:url"
-import {setTimeout, clearTimeout} from "node:timers"
-import console from "node:console"
-import JSON5 from "json5"
 
 import Validator from "./Validator.js"
+
+// A whole bunch of things to keep code tidy
+const {env, Range, Selection, TabInputText, TextEditorRevealType, Uri} = vscode
+const {window, workspace, ViewColumn} = vscode
+
+const $resources = {
+  base: {
+    directory: ["src", "webview"]
+  },
+  codicons: {
+    directory: ["node_modules", "@vscode", "codicons", "dist"],
+    file: ["node_modules", "@vscode", "codicons", "dist", "codicon.css"],
+  }
+}
 
 export default class HexPanel {
   static viewType = "hex.panel"
 
-  #state = null
+  #glog
+  #current
   #stateChangeListeners = []
+  /** @type {FileObject} */
   #selectedFile = null
   #context = null
   #webviewView = null
+  #sessionId = null
   #selectedFileWatcher = null
   #updateTimeout = null
   #schema = null
+  #state = {}
 
   // The cache of colors objects per file
   #userColors = new Map()
@@ -27,10 +42,19 @@ export default class HexPanel {
   // A registry of the last update time of files
   #timestamps = new Map()
 
-  constructor(context, schema, state={}) {
+  constructor(context, schema, glog) {
     this.#context = context
-    this.#state = state
     this.#schema = schema
+    this.#state = {}
+    this.#glog = glog
+  }
+
+  async showWebview(context=this.#context) {
+    if(this.#webviewView) {
+      this.#webviewView.reveal()
+    } else {
+      await this.#createWebview(context)
+    }
   }
 
   // Method to emit state changes
@@ -39,7 +63,7 @@ export default class HexPanel {
       this.#state = {...this.#state, ...newState}
       this.#stateChangeListeners.forEach(listener => listener(this.#state))
     } catch(error) {
-      console.error(error)
+      this.#glog.error(error)
     }
   }
 
@@ -49,8 +73,8 @@ export default class HexPanel {
   }
 
   // Public methods for toolbar commands
-  async selectFile() {
-    await this.#selectFile()
+  async selectFile(resourceUri) {
+    await this.#selectFile(resourceUri)
   }
 
   async refresh() {
@@ -61,7 +85,10 @@ export default class HexPanel {
     if(!this.#webviewView)
       return
 
-    this.#webviewView.webview.postMessage({type: "focusFilter"})
+    this.#webviewView.webview.postMessage({
+      type: "focusElement",
+      element: "propertyFilter"
+    })
   }
 
   async copyMissingProperties() {
@@ -76,12 +103,11 @@ export default class HexPanel {
 
       if(this.#selectedFile) {
         try {
-          const doc =
-            await vscode.workspace.openTextDocument(this.#selectedFile)
+          const doc = await workspace.openTextDocument(this.#selectedFile)
           const themeData = JSON.parse(doc.getText())
 
           userColors = themeData?.colors ?? {}
-        } catch(_) {
+        } catch {
           // ignore file read issues
         }
       }
@@ -101,92 +127,113 @@ export default class HexPanel {
         return acc
       }, {})
 
-      await vscode.env.clipboard.writeText(JSON.stringify(scaffold, null, 2))
-      vscode.window.showInformationMessage(`Copied ${missing.length} missing properties to clipboard`)
+      await env.clipboard.writeText(JSON.stringify(scaffold, null, 2))
     } catch(error) {
-      vscode.window.showErrorMessage(`Failed to copy missing properties: ${error.message}`)
+      this.#glog.error(`Failed to copy missing properties: ${error.message}`)
     }
   }
 
-  async resolveWebviewView(webviewView) {
+  async #createWebview(context) {
     try {
-      this.#webviewView = webviewView
+      const localResourceRoots = Array.from(Object.values($resources))
+        .map(e => this.#extPathToUri(e.directory))
 
-      webviewView.webview.options = {
-        enableScripts: true,
-        localResourceRoots: [this.#context.extensionUri],
-        retainContextWhenHidden: true
-      }
+      this.#webviewView = window.createWebviewPanel(
+        "Hex",
+        "Hex",
+        ViewColumn.Beside,
+        {
+          enableScripts: true,
+          localResourceRoots,
+          retainContextWhenHidden: true
+        }
+      )
 
-      webviewView.webview.html =
-        await this.#getWebviewContent(webviewView.webview)
+      this.#webviewView.onDidDispose(
+        () => {
+          this.#webviewView = null
+          this.#sessionId = null
+
+        }, null, context.subscribers
+      )
+
+      this.#webviewView.onDidChangeViewState(_ => {
+        // nothing to see here
+      })
+
+      this.#webviewView.webview.html = await this.#getWebviewContent()
 
       // Handle messages from webview
-      webviewView.webview.onDidReceiveMessage(
+      this.#webviewView.webview.onDidReceiveMessage(
         async message => this.#processMessage(message),
         null,
         this.#context.subscriptions
       )
 
-      // Restore state if available
-      webviewView.onDidChangeVisibility(async() => {
-        try {
-          if(webviewView.visible) {
-            // Webview became visible, refresh data
-            await this.#updateData()
-            if(this.#selectedFile)
-              this.#setupFileWatcher()
-          } else {
-            if(this.#selectedFileWatcher) {
-              this.#selectedFileWatcher.dispose()
-              this.#selectedFileWatcher = null
-            }
-          }
-        } catch(error) {
-          console.error(error)
-        }
-      })
+      // // Restore state if available
+      // webviewView.onDidChangeVisibility(async() => {
+      //   try {
+      //     if(webviewView.visible) {
+      //       // Webview became visible, refresh data
+      //       await this.#updateData()
+      //       if(this.#selectedFile)
+      //         this.#setupFileWatcher()
+      //     } else {
+      //       if(this.#selectedFileWatcher) {
+      //         this.#selectedFileWatcher.dispose()
+      //         this.#selectedFileWatcher = null
+      //       }
+      //     }
+      // } catch(error) {
+      // this.#glog.error(error)
+      //   }
+      // })
 
       // Initial data load
-      await this.#updateData()
+      // await this.#updateData()
     } catch(error) {
-      console.error(error)
-      throw error
+      this.#glog.error(error)
     }
   }
 
-  async #selectFile() {
+  async #selectFile(resourceUri=null) {
     try {
-      const fileUri = await vscode.window.showOpenDialog({
-        canSelectFiles: true,
-        canSelectFolders: false,
-        canSelectMany: false,
-        filters: {
-          "VS Code Theme": ["color-theme.json"]
-        },
-        defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri
-      })
+      if(!resourceUri) {
+        const fileUri = await window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: false,
+          filters: {
+            "VS Code Theme": ["color-theme.json"]
+          },
+          defaultUri: workspace.workspaceFolders?.[0]?.uri
+        })
 
-      if(fileUri?.[0]) {
-      // Clean up previous file watcher
+        if(fileUri?.[0]) {
+          resourceUri = fileUri[0]
+        }
+      }
+
+      if(resourceUri) {
+        // Clean up previous file watcher
         if(this.#selectedFileWatcher) {
           this.#selectedFileWatcher.dispose()
           this.#selectedFileWatcher = null
         }
 
-        this.#selectedFile = fileUri[0]
+        const file = new FileObject(resourceUri.path)
+        this.#selectedFile = file
 
-        // Save selected file to workspace state
-        this.#context.workspaceState.update("hex.selectedFile", this.#selectedFile)
-
+        // Show the webview!
+        await this.showWebview()
+        // Do the thing
         await this.#updateData()
-
         this.#setupFileWatcher()
         this.#emitStateChange({selectedFile: this.#selectedFile})
       }
     } catch(error) {
-      console.error(error)
-      throw error
+      console.error("Nope", error)
+      // throw error
     }
   }
 
@@ -201,13 +248,8 @@ export default class HexPanel {
     }
 
     try {
-      // Original WIP debug message restored
-      const fileDir = path.dirname(this.#selectedFile.fsPath)
-      const fileBase = path.basename(this.#selectedFile.fsPath)
-      const pattern = new vscode.RelativePattern(fileDir, fileBase)
-
-      this.#selectedFileWatcher = vscode.workspace.createFileSystemWatcher(
-        pattern,
+      this.#selectedFileWatcher = workspace.createFileSystemWatcher(
+        this.#selectedFile.path,
         true,  // ignore create
         false, // watch change
         false  // watch delete
@@ -244,14 +286,13 @@ export default class HexPanel {
     if(!this.#webviewView)
       return
 
-    // Cache key is just the file name.
-    const cacheKey = this.#selectedFile?.fsPath
-
     try {
-      if(cacheKey) {
+      if(this.#selectedFile) {
+        const cacheKey = this.#selectedFile.path
+
         try {
           // Load theme content
-          await this.#loadThemeContent(cacheKey, force)
+          await this.#loadThemeContent(force)
 
           // Validate only the colors against workbench schema (memory cache,
           // force bypass)
@@ -275,22 +316,23 @@ export default class HexPanel {
         }
 
         const userColorsForFile =
-          this.#userColors.get(this.#selectedFile.fsPath) || {}
+          this.#userColors.get(this.#selectedFile.path) || {}
+
         const selectedFileInfo = {
-          path: vscode.workspace.asRelativePath(this.#selectedFile),
+          path: workspace.asRelativePath(this.#selectedFile.path),
           propertyCount: Object.keys(userColorsForFile).length,
           schemaSize: this.#schema.size,
-          timestamp: this.#timestamps.get(this.#selectedFile.fsPath)
+          timestamp: this.#timestamps.get(this.#selectedFile.path)
+        }
+
+        this.#current = {
+          type: "validationResults",
+          selectedFile: selectedFileInfo,
+          validationResults: this.#validations.get(this.#selectedFile.path)
         }
 
         // Send data to webview
-        const postPayload = {
-          type: "dataUpdated",
-          selectedFile: selectedFileInfo,
-          validationResults: this.#validations.get(this.#selectedFile.fsPath)
-        }
-
-        this.#webviewView.webview.postMessage(postPayload)
+        this.#webviewView.webview.postMessage(this.#current)
       }
     } catch(error) {
       this.#webviewView.webview.postMessage({
@@ -300,45 +342,49 @@ export default class HexPanel {
     }
   }
 
-  async #getWebviewContent(webview) {
+  #extPathToUri(parts) {
+    return Uri.joinPath(this.#context.extensionUri, ...parts)
+  }
+
+  #extPathToWebviewUri(parts) {
+    if(!this.#webviewView?.webview)
+      throw new Error("No such thing as a webview.")
+
+    return this.#webviewView.webview.asWebviewUri(this.#extPathToUri(parts))
+  }
+
+  /**
+   * Loads and returns the HTML content for the webview panel, replacing
+   * placeholders with actual URIs.
+   *
+   * @param {vscode.WebviewPanel} webview - The webview
+   * @returns {Promise<string>} The loaded HTML
+   */
+  async #getWebviewContent() {
     try {
-      const cwf = fileURLToPath(import.meta.url)
-      const cwd = path.dirname(cwf)
+      const webview = this.#webviewView.webview
+      const {base, codicons} = $resources
 
-      // Get webview URI for CSS file
-      const cssPath = vscode.Uri.file(path.join(cwd, "webview", "webview.css"))
-      const cssUri = webview.asWebviewUri(cssPath)
+      // Now setup the base
+      const baseDir = this.#extPathToWebviewUri(base.directory)
+      const codiFile = this.#extPathToWebviewUri(codicons.file)
 
-      // Get webview URI for CodeIcons file
-      const codeIconPath = vscode.Uri.joinPath(
-        this.#context.extensionUri,
-        "node_modules", "@vscode", "codicons", "dist", "codicon.css"
-      )
-      const codeIconUri = webview.asWebviewUri(codeIconPath)
+      // Get the html
+      const thisFile = new FileObject(import.meta.filename)
+      const htmlFile = thisFile.parent.getFile("webview/webview.html")
+      const html = await htmlFile.read()
 
-      // Get webview URI for @vscode-elements
-      const vscodeElementsPath = vscode.Uri.joinPath(
-        this.#context.extensionUri,
-        "node_modules", "@vscode-elements", "elements", "dist", "bundled.js"
-      )
-      const vscodeElementsUri = webview.asWebviewUri(vscodeElementsPath)
+      // Replace placeholders in the html file
+      const subbed = html
+        .replace(/\{\{BASE_URI\}\}/g, Data.append(baseDir.toString(), "/"))
+        .replace(/\{\{CSP_SOURCE\}\}/g, webview.cspSource)
+        .replace(/\{\{CODICON_CSS\}\}/g, codiFile.toString())
 
-      // Get webview URI for @vscode-elements
-      const webviewScriptPath = vscode.Uri.file(path.join(cwd, "webview", "webview.js"))
-      const webviewScriptUri = webview.asWebviewUri(webviewScriptPath)
-
-      const htmlPath = path.join(cwd, "webview", "webview.html")
-      let html = await fs.readFile(htmlPath, "utf8")
-
-      // Replace placeholders
-      html = html.replace(/\{\{CSS_URI\}\}/g, cssUri.toString())
-      html = html.replace(/\{\{CSP_SOURCE\}\}/g, webview.cspSource)
-      html = html.replace(/\{\{VSCODE_ELEMENTS_URI\}\}/g, vscodeElementsUri.toString())
-      html = html.replace(/\{\{SCRIPT_URI\}\}/g, webviewScriptUri.toString())
-      html = html.replace(/\{\{CODEICON_URI\}\}/g, codeIconUri.toString())
-
-      return html
+      // yeet
+      return subbed
     } catch(error) {
+      this.#glog.error(error.stack)
+
       return "<div class=\"error\">Error loading webview content: " + error.message + "</div>"
     }
   }
@@ -362,79 +408,92 @@ export default class HexPanel {
   }
 
   async #jumpToProperty({property}) {
+    // this.#glog.info(`Jumping to property '${property}' in '${this.#selectedFile?.path}'`)
+
     if(!property || !this.#selectedFile)
       return
 
     try {
-      // Attempt to locate the property in the currently selected file and
-      // reveal
-      try {
-        const doc = await vscode.workspace.openTextDocument(this.#selectedFile)
-        const text = doc.getText()
-        const escaped = this.#escapeRegexString(property)
-        const pattern = new RegExp(`"${escaped}"\\s*:`, "g")
-        const match = pattern.exec(text)
+      const uri = Uri.parse(this.#selectedFile.url)
+      // this.#glog.info("uri = %o", uri)
 
-        if(match) {
-          // inside opening quote
-          const pos = doc.positionAt(match.index + 1)
-          const editor =
-            await vscode.window.showTextDocument(doc, {preview: false})
+      // openTextDocument returns existing doc if already open, doesn't duplicate
+      const doc = await workspace.openTextDocument(uri)
 
-          editor.revealRange(
-            new vscode.Range(pos, pos),
-            vscode.TextEditorRevealType.InCenterIfOutsideViewport
-          )
+      // Find existing tab for this document across all tab groups
+      const existingTab = window.tabGroups.all
+        .flatMap(group => group.tabs.map(tab => ({tab, group})))
+        .find(({tab}) =>
+          tab.input instanceof TabInputText &&
+          tab.input.uri.toString() === uri.toString()
+        )
 
-          editor.selection = new vscode.Selection(
-            pos,
-            pos.translate(0, property.length)
-          )
-        } else {
-          this.#showError(`'${property}' not found in file ${this.#selectedFile}`,
-            3000
-          )
-        }
-      } catch {
-        // Ignore reveal errors
+      const viewColumn = existingTab?.group.viewColumn ?? ViewColumn.Beside
+
+      const text = doc.getText()
+      const escaped = this.#escapeRegexString(property)
+      const pattern = new RegExp(`"${escaped}"\\s*:`, "g")
+      const match = pattern.exec(text)
+
+      if(match) {
+        // inside opening quote
+        const pos = doc.positionAt(match.index + 1)
+        const editor = await window.showTextDocument(doc, {
+          viewColumn, preview: false
+        })
+
+        editor.revealRange(
+          new Range(pos, pos),
+          TextEditorRevealType.InCenterIfOutsideViewport
+        )
+
+        editor.selection = new Selection(
+          pos,
+          pos.translate(0, property.length)
+        )
+      } else {
+        this.#processMessage(
+          "showError",
+          `'${property}' not found in file ${this.#selectedFile}`
+        )
       }
-    } catch(err) {
-      vscode.window.showErrorMessage(
-        `Failed to copy property: ${err.message}`
-      )
+    } catch(error) {
+      window.showErrorMessage(error.message, 3_000)
+      // Ignore reveal errors
     }
   }
 
-  async #loadThemeContent(fileName, force=false) {
+  async #loadThemeContent(force=false) {
+    // this.#glog.info("loadThemeContent")
+
     try {
       // Is file there and also accessible?
-      await fs.access(fileName, fs.constants.R_OK)
+      if(!(await this.#selectedFile.exists))
+        return
 
-      const stats = await fs.lstat(fileName)
-      const lastChanged = stats.mtime
+      const lastChanged = await this.#selectedFile.modified()
+      const path = this.#selectedFile.path
 
       if(!force &&
-          this.#timestamps.has(fileName) &&
-          this.#userColors.has(fileName)) {
+          this.#timestamps.has(path) &&
+          this.#userColors.has(path)) {
 
-        if(this.#timestamps.get(fileName) === lastChanged)
-          return this.#userColors.get(fileName)
+        if(this.#timestamps.get(path) === lastChanged)
+          return this.#userColors.get(path)
       }
 
-      const fileContent = await fs.readFile(fileName, "utf-8")
+      const fileContent = await this.#selectedFile.loadData()
 
       if(!fileContent)
         throw new Error("No content loaded")
 
-      const parsed = JSON5.parse(fileContent)
-
-      if(!Object.prototype.hasOwnProperty.call(parsed, "colors"))
+      if(!Object.prototype.hasOwnProperty.call(fileContent, "colors"))
         throw new Error("No 'colors' object in theme file.")
 
-      this.#userColors.set(fileName, parsed.colors)
-      this.#timestamps.set(fileName, lastChanged)
+      this.#userColors.set(this.#selectedFile.path, fileContent.colors)
+      this.#timestamps.set(this.#selectedFile.path, lastChanged)
     } catch(error) {
-      console.error(`Unable to load ${fileName}`, error)
+      console.error(`Unable to load ${this.#selectedFile.path}`, error)
     }
   }
 
@@ -444,29 +503,49 @@ export default class HexPanel {
     if(!userColors)
       return
 
-    const result = await Validator.validate(this.#schema.map, userColors)
+    const result = await Validator.validate(
+      this.#schema.map ?? new Map(), userColors
+    )
 
     this.#setValidations(fileName, result)
   }
 
-  #showError({message}) {
-    vscode.window.showErrorMessage(message)
-  }
-
   async #processMessage(message) {
+    // this.#glog.info(`Received message: %o`, message)
+
     switch(message.type) {
       case "showError":
-        message.message && this.#showError(message)
+        message.message
+        &&
+        window.showErrorMessage(message.message, 3_000)
         break
       case "jumpToProperty":
         message.property && await this.#jumpToProperty(message)
         break
+      case "requestData":
+        await this.#updateData()
+        break
+      case "log":
+        this.#glog.info(`[webview]: ${message.msg}`)
+        break
+      case "ready":
+        try {
+          this.#sessionId ??= crypto.randomUUID().slice(0, 8)
+          this.#webviewView.webview.postMessage(
+            {
+              type: "setSessionId",
+              sessionId: this.#sessionId
+            }
+          )
+        } catch(error) {
+          this.#glog.error(error)
+        } finally {
+          break
+        }
     }
   }
 
   dispose() {
-    this.#context.subscriptions.forEach(d => d.dispose())
-
     if(this.#selectedFileWatcher)
       this.#selectedFileWatcher.dispose()
   }

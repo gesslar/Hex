@@ -16,111 +16,58 @@
   "contributes": {
     "commands": [
       {
-        "command": "hex.extract",
-        "title": "Hex: Extract"
+        "command": "hex.show",
+        "title": "Hex: Show Hex"
       },
       {
-        "command": "hex.selectFile",
-        "title": "Select JSON File",
-        "icon": "$(folder-opened)"
+        "command": "hex.validate",
+        "title": "Validate selected theme file in Hex",
+        "icon": "$(symbol-color)"
       },
       {
-        "command": "hex.refresh",
-        "title": "Refresh",
-        "icon": "$(refresh)"
+        "command": "hex.select",
+        "title": "Open and validate theme file in Hex",
+        "icon": "$(symbol-color)"
       }
     ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "Hex",
-          "title": "Hex",
-          "icon": "$(symbol-color)"
-        }
-      ]
-    },
-    "views": {
-      "Hex": [
-        {
-          "icon": "$(symbol-color)",
-          "id": "hex.panel",
-          "name": "Validator",
-          "type": "webview",
-          "contextualTitle": "Hex"
-        }
-      ]
-    },
     "menus": {
-      "view/title": [
+      "editor/title/run": [
         {
-          "command": "hex.selectFile",
-          "when": "view == hex.panel",
-          "group": "navigation@1"
+          "command": "hex.validate",
+          "group": "HexGroup1@1",
+          "when": "isFileSystemResource && !explorerResourceIsFolder && resourceScheme == file &&  resourceFilename =~ /\\.color-theme\\.json$/"
         },
         {
-          "command": "hex.refresh",
-          "when": "view == hex.panel",
-          "group": "navigation@2"
+          "command": "hex.select",
+          "group": "HexGroup2@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "hex.validate",
+          "group": "HexGroup@1",
+          "when": "isFileSystemResource && !explorerResourceIsFolder && resourceScheme == file &&  resourceFilename =~ /\\.color-theme\\.json$/"
         }
       ]
-    },
-    "configuration": {
-      "properties": {
-        "hex.extractMode": {
-          "type": "string",
-          "enum": [
-            "console",
-            "file",
-            "clipboard"
-          ],
-          "enumDescriptions": [
-            "Log to console only",
-            "Save to configured output path",
-            "Copy to clipboard"
-          ],
-          "default": "clipboard",
-          "markdownDescription": "How to extract the schema. If set to `file`, requires [Output Path](#hex.outputPath) to be set."
-        },
-        "hex.outputFormat": {
-          "type": "string",
-          "enum": [
-            "json5",
-            "yaml"
-          ],
-          "enumDescriptions": [
-            "JSON5 format",
-            "YAML format"
-          ],
-          "default": "yaml",
-          "description": "Output format for extracted schema."
-        },
-        "hex.outputPath": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Path where extracted schema should be written (requires [Extract Mode](#hex.extractMode) as `file`)."
-        }
-      }
     }
   },
   "scripts": {
-    "pretest": "echo 'No build step needed for ESM JS'",
-    "test": "echo 'No tests yet'",
-    "update": "npx npm-check-updates -u && npm install"
-  },
-  "devDependencies": {
-    "@stylistic/eslint-plugin": "^5.7.1",
-    "@types/vscode": "^1.109.0",
-    "eslint": "^9.39.2",
-    "eslint-plugin-jsdoc": "^62.5.2",
-    "globals": "^17.3.0"
+    "update": "pnpm self-update && pnpx npm-check-updates -u && pnpm install"
   },
   "type": "module",
   "dependencies": {
-    "@vscode-elements/elements": "^2.4.0",
+    "@gesslar/toolkit": "^3.31.0",
+    "@popperjs/core": "^2.11.8",
     "@vscode/codicons": "^0.0.44",
     "ajv": "^8.17.1",
     "json5": "^2.2.3",
-    "npm": "^11.9.0",
     "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@gesslar/uglier": "^1.3.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "eslint": "^9.39.2",
+    "node-resolve": "^1.3.4",
+    "rollup": "^4.57.1"
   }
 }
