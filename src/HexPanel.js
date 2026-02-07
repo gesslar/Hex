@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 import Validator from "./Validator.js"
 
 // A whole bunch of things to keep code tidy
-const {env, Range, Selection, TabInputText, TextEditorRevealType, Uri} = vscode
+const {Range, Selection, TabInputText, TextEditorRevealType, Uri} = vscode
 const {window, workspace, ViewColumn} = vscode
 
 const $resources = {
@@ -49,12 +49,15 @@ export default class HexPanel {
     this.#glog = glog
   }
 
-  async showWebview(context=this.#context) {
+  async showWebview({context=this.#context, file=null}) {
     if(this.#webviewView) {
       this.#webviewView.reveal()
     } else {
       await this.#createWebview(context)
     }
+
+    if(this.#webviewView && file)
+      this.#webviewView.title = `Hex - ${file.name}`
   }
 
   // Method to emit state changes
@@ -91,48 +94,6 @@ export default class HexPanel {
     })
   }
 
-  async copyMissingProperties() {
-    if(!this.#webviewView)
-      return
-
-    try {
-      // Ensure schema loaded
-      const schemaMap = this.#schema.map
-
-      let userColors = {}
-
-      if(this.#selectedFile) {
-        try {
-          const doc = await workspace.openTextDocument(this.#selectedFile)
-          const themeData = JSON.parse(doc.getText())
-
-          userColors = themeData?.colors ?? {}
-        } catch {
-          // ignore file read issues
-        }
-      }
-
-      const missing = []
-
-      for(const key of schemaMap.keys()) {
-        if(!(key in userColors))
-          missing.push(key)
-      }
-
-      const scaffold = missing.reduce((acc, key) => {
-        const schemaProp = schemaMap.get(key) || {}
-
-        acc[key] = schemaProp.sample || (schemaProp.alphaRequired ? "#ffffffaa" : "#ffffff")
-
-        return acc
-      }, {})
-
-      await env.clipboard.writeText(JSON.stringify(scaffold, null, 2))
-    } catch(error) {
-      this.#glog.error(`Failed to copy missing properties: ${error.message}`)
-    }
-  }
-
   async #createWebview(context) {
     try {
       const localResourceRoots = Array.from(Object.values($resources))
@@ -151,9 +112,7 @@ export default class HexPanel {
 
       this.#webviewView.onDidDispose(
         () => {
-          this.#webviewView = null
-          this.#sessionId = null
-
+          this.dispose()
         }, null, context.subscriptions
       )
 
@@ -204,7 +163,7 @@ export default class HexPanel {
         this.#selectedFile = file
 
         // Show the webview!
-        await this.showWebview()
+        await this.showWebview({file})
         // Do the thing
         await this.#updateData()
         this.#setupFileWatcher()
@@ -503,16 +462,32 @@ export default class HexPanel {
         &&
         window.showErrorMessage(message.message)
         break
+
+      case "showInfo":
+        message.message
+        &&
+        window.showInformationMessage(message.message)
+        break
+
+      case "showWarning":
+        message.message
+        &&
+        window.showWarningMessage(message.message)
+        break
+
       case "jumpToProperty":
         message.property && await this.#jumpToProperty(message)
         break
+
       case "requestData":
         await this.#updateData()
         break
+
       case "log":
         this.#glog.info(`[webview]: ${message.msg}`)
         break
-      case "ready":
+
+      case "ready": {
         try {
           this.#sessionId ??= crypto.randomUUID().slice(0, 8)
           this.#webviewView.webview.postMessage(
@@ -526,11 +501,102 @@ export default class HexPanel {
         }
 
         break
+      }
+
+      case "exportProblems": {
+        await this.#exportProblems()
+        break
+      }
+
+      case "exportMissing": {
+        await this.#exportMissing()
+        break
+      }
+
+    }
+  }
+
+  async #exportProblems() {
+    const language = "markdown"
+    const file = this.#selectedFile
+    const cacheKey = file.path
+    const validations = this.#validations.get(cacheKey)
+    const content = validations
+      .filter(e => e.status !== "valid")
+      .map(e => {
+        return `### \`${e.property}\`\n` +
+               `\n` +
+               `Status: ${e.status}\n` +
+               `Schema description: ${e.description}\n` +
+               `Theme value: ${e.value}\n` +
+               `Error: ${e.message ?? ""}`
+      })
+
+    content.unshift(`## ${this.#selectedFile.path}`)
+    content.unshift("# Hex Validation - Problems detected in theme")
+
+    try {
+      const document = await workspace.openTextDocument({
+        content: content.join("\n\n"),
+        language
+      })
+
+      // 2. Show the document in a new editor tab
+      await window.showTextDocument(document, {
+        preview: false,
+        viewColumn: vscode.ViewColumn.Active
+      })
+
+    } catch(error) {
+      window.showErrorMessage("Failed to open new editor tab: " + error.message)
+    }
+  }
+
+  async #exportMissing() {
+    const language = "markdown"
+    const file = this.#selectedFile
+    const cacheKey = file.path
+    const validations = this.#validations.get(cacheKey).map(e => e.property)
+    const schema = this.#schema.map
+    const fromMap = Object.fromEntries(schema)
+    const properties = Object.keys(fromMap)
+    const content = properties
+      .filter(e => !validations.includes(e))
+      .map(e => `- \`${e}\` - ${fromMap[e]?.description??""}`)
+
+    content.sort()
+    const propertyCount = validations.length
+    const schemaSize = properties.length
+    const percent = (propertyCount / schemaSize * 100.0).toFixed(0)
+
+    content.unshift("## Unrepresented Workspace Colors")
+    content.unshift(`This theme has ${propertyCount} out of ${schemaSize} potential properties defined (${percent}% coverage).`)
+    content.unshift(`## ${this.#selectedFile.path}`)
+    content.unshift("# Hex Validation - Properties missing from theme")
+
+    try {
+      const document = await workspace.openTextDocument({
+        content: content.join("\n\n"),
+        language
+      })
+
+      // 2. Show the document in a new editor tab
+      await window.showTextDocument(document, {
+        preview: false,
+        viewColumn: vscode.ViewColumn.Active
+      })
+
+    } catch(error) {
+      window.showErrorMessage("Failed to open new editor tab: " + error.message)
     }
   }
 
   dispose() {
     if(this.#selectedFileWatcher)
       this.#selectedFileWatcher.dispose()
+
+    this.#selectedFile = null
+    this.#webviewView = null
+    this.#sessionId = null
   }
 }

@@ -12,7 +12,7 @@ export default class HexCommands {
   #schema = null
 
   async showWebview(context, webviewProvider) {
-    webviewProvider.showWebview(context)
+    webviewProvider.showWebview({context})
   }
 
   async extract() {
