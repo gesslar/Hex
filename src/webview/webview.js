@@ -39,7 +39,13 @@ class WebHex {
     // Global notify!
     Notify.on("message", evt => this.#onMessage(evt))
     Notify.on("data:received", evt => this.#processIncomingData(evt))
-    Notify.on("error:received", evt => this.#processIncomingError(evt))
+
+    // Buttonbar
+    Notify.on("click", evt => this.#handleButtonBarClick(evt), this.#elements.exportProblems)
+    Notify.on("click", evt => this.#handleButtonBarClick(evt), this.#elements.exportMissing)
+    Notify.on("click", evt => this.#handleButtonBarClick(evt), this.#elements.snake)
+
+    // Filter bar
     Notify.on("input", evt => this.#handleFilterChange(evt), this.#elements.filterText)
     Notify.on("click", evt => this.#handleClearAllClick(evt), this.#elements.clearAll)
     Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.matchCase)
@@ -47,6 +53,7 @@ class WebHex {
     Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.errorsOnly)
     Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.warningsOnly)
 
+    // Wunderbar
     this.#setHasFile(false)
 
     vscode.postMessage({type: "ready"})
@@ -122,10 +129,6 @@ class WebHex {
     this.#updateValidationDisplay(detail.validationResults)
   }
 
-  #processIncomingError(evt) {
-    this.#setError(evt.message)
-  }
-
   /**
    * Set UI to show either the selected file view or the no-file placeholder.
    *
@@ -141,31 +144,6 @@ class WebHex {
     document.querySelectorAll("[file]").forEach(el =>
       el.toggleAttribute("hidden", !hasFile)
     )
-  }
-
-  /**
-   * Set an error message or clear it.
-   *
-   * @param {string|null} message - The message to display. Null to clear.
-   */
-  #setError(message) {
-    const errorText = this.#elements.errorText
-
-    if(!errorText)
-      return
-
-    if(message === null) {
-      errorText.textContent = ""
-      errorText.classList.toggle("noError")
-
-      return
-    }
-
-    if(!message)
-      return
-
-    errorText.textContent = message
-    errorText.classList.toggle("noError")
   }
 
   #updateErrors(items) {
@@ -228,14 +206,33 @@ class WebHex {
     this.#handleFilterChange()
   }
 
+  #handleButtonBarClick(evt) {
+    const element = evt.currentTarget
+
+    switch(element.id) {
+      case "snake": {
+        vscode.postMessage({type: "showInfo", message: "Snake."})
+        break
+      }
+
+      case "export-problems": {
+        vscode.postMessage({type: "exportProblems"})
+        break
+      }
+
+      case "export-missing": {
+        vscode.postMessage({type: "exportMissing"})
+        break
+      }
+    }
+  }
+
   #handleFilterCriterionClick(evt) {
     const element = evt.currentTarget
     const elementName = element.dataset.elementName
     const newValue = element.dataset.active === elementName
       ? ""
       : elementName
-
-    console.log("bmw", evt.target)
 
     element.dataset.active = newValue
     element.classList.toggle("active")
@@ -309,16 +306,19 @@ class WebHex {
       return
 
     if(selectedFile.error) {
-      this.#setError(selectedFile.error)
+      vscode.postMessage({type: "showError", message: selectedFile.error})
 
       return
     }
 
-    this.#elements.filePath.innerText = selectedFile.path
-    this.#elements.propertyCount.innerText = selectedFile.propertyCount || "No"
-    this.#elements.coveragePercent.innerText = (
-      (selectedFile.propertyCount/selectedFile.schemaSize)*100.0).toFixed(0) || "0"
-    this.#elements.totalProperties.innerText = selectedFile.schemaSize || "an unknown number of"
+    const total = selectedFile.schemaSize || "???"
+    const properties = selectedFile.propertyCount || "0"
+    const coverage = selectedFile.schemaSize && selectedFile.propertyCount
+      ? (properties / total * 100.0).toFixed(0)
+      : "unknown"
+
+    this.#elements.properties.innerText = `${properties}/${total} properties`
+    this.#elements.coverage.innerText = `${coverage}% coverage`
   }
 
   /**

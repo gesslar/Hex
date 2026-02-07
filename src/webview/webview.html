@@ -17,91 +17,106 @@
 </head>
 
 <body>
-  <main>
+  <header>
+    <div role="toolbar" aria-label="Main toolbar for Hex">
 
-    <section id="selectedFileSection" hidden>
-      <section no-file>
-        <p id="noFile"></p>
-        Open a <tt>color-theme.json</tt> file via the Hex icon in the toolbar, or right-click a JSON file in Explorer.
-      </section>
+      <div id="buttonbar">
 
-      <div>
-        <p id="errorLabel">
-          <span class="error noError" id="errorText"></span>
-        </p>
+        <button id="export-problems" class="nav-btn" title="Export problems">
+          <i class="codicon codicon-references"></i>
+        </button>
+
+        <button id="export-missing" class="nav-btn" title="Export undefined properties">
+          <i class="codicon codicon-symbol-property"></i>
+        </button>
+
+        <span class="divider"></span>
+
+        <button id="snake" class="nav-btn" title="Snake.">
+          <i class="codicon codicon-snake"></i>
+        </button>
+
       </div>
 
-      <section id="selectedFileInformation" file>
+      <!-- Ze Filter, bb! -->
+      <div id="propertyFilter">
+        <input id="filter-text" type="text" placeholder="Filter by property name">
+        <span class="match-info" part="match-info"></span>
 
-        <!-- Ze Filter, bb! -->
-        <div class="wrapper">
-          <div id="propertyFilter">
-            <input id="filter-text" type="text" placeholder="Filter by property name">
-            <span class="match-info" part="match-info"></span>
+        <button id="clear-all" class="nav-btn" title="Clear filters">
+          <i class="codicon codicon-clear-all"></i>
+        </button>
 
-            <button id="clear-all" class="nav-btn" title="Clear filters">
-              <i class="codicon codicon-clear-all"></i>
-            </button>
+        <span class="divider"></span>
 
-            <span class="divider"></span>
+        <button id="match-case" title="Match Case (Alt+C)">
+          <i class="codicon codicon-case-sensitive"></i>
+        </button>
 
-            <button id="match-case" title="Match Case (Alt+C)">
-              <i class="codicon codicon-case-sensitive"></i>
-            </button>
+        <button id="use-regex" title="Use Regular Expression (Alt+R)">
+          <i class="codicon codicon-regex"></i>
+        </button>
 
-            <button id="use-regex" title="Use Regular Expression (Alt+R)">
-              <i class="codicon codicon-regex"></i>
-            </button>
+        <span class="divider"></span>
 
-            <span class="divider"></span>
+        <button id="errors-only" title="Show errors only">
+          <i class="codicon codicon-error error-icon"></i>
+          <span id="error-count">0</span>
+        </button>
 
-            <button id="errors-only" title="Show errors only">
-              <i class="codicon codicon-error error-icon"></i>
-              <span id="error-count">0</span>
-            </button>
+        <button id="warnings-only" title="Show warnings only">
+          <i class="codicon codicon-warning warning-icon"></i>
+          <span id="warning-count">0</span>
+        </button>
 
-            <button id="warnings-only" title="Show warnings only">
-              <i class="codicon codicon-warning warning-icon"></i>
-              <span id="warning-count">0</span>
-            </button>
-          </div>
+        <div class="problems">
+          <button id="previous-problem" title="Jump to the previous problem" class="problem">
+            <i class="codicon codicon-chevron-up"></i>
+          </button>
 
-          <!-- Content replaced with the theme file path -->
-          <div id="filePath"></div>
-
-          <!-- The number of properties in the theme file -->
-          <div id="properties">
-            <span id="propertyCount"></span> color properties found
-          </div>
-
-          <!-- Coverage statistics -->
-          <div id="coverage">
-            <span id="coveragePercent"></span>&percnt; coverage of <span id="totalProperties"></span> available
-            properties
-          </div>
+          <button id="next-problem" title="Jump to the next problem" class="problem">
+            <i class="codicon codicon-chevron-down"></i>
+          </button>
         </div>
-      </section>
+      </div>
+    </div>
+  </header>
 
-      <!-- <hr file /> -->
+  <main>
+    <section id="selectedFileSection" hidden>
+      <section no-file>
+
+        <p id="noFile">
+          Open a
+          <span class="tt">color-theme.json</span> file via the Hex icon in the
+          toolbar, or right-click a JSON file in Explorer.
+        </p>
+
+      </section>
 
     </section>
 
     <section id="validationSection" file>
-      <section id="validationResultsHeader">
-        <!-- <find-widget id="propertyFilter" placeholder="Filter by property name"
-          codicon-href="{{CODICON_CSS}}"></find-widget> -->
-      </section>
-      <section id="validationResults">
-
-      </section>
+      <div id="validationResults">
+      </div>
     </section>
   </main>
 
   <footer>
+    <div role="statusbar" file>
+      <span id="properties" class="item static right">
+
+      </span>
+      <span id="coverage" class="item static right">
+
+      </span>
+    </div>
+    <!--
     <a href="https://code.visualstudio.com/api/references/theme-color" class="docs-link"
       title="Open Theme Color Documentation in your browser">
       Theme Color Documentation
     </a>
+    -->
   </footer>
 
   <template id="validation-item-template">
