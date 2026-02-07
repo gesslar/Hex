@@ -330,6 +330,11 @@ body {
         display: none;
       }
 
+      &.focused {
+        outline-width: 2px;
+        outline-color: var(--vscode-focusBorder);
+      }
+
       .validation-property {
         word-break: break-all;
         font-family: var(--vscode-editor-font-family);

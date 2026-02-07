@@ -16,6 +16,7 @@ class WebHex {
   #elements = {}
   #filterRegex
 
+  #currentProblemIndex = -1
   #clickFunction = evt => this.#validationElementClick(evt)
   #log = msg => vscode.postMessage({type: "log", msg})
 
@@ -52,6 +53,9 @@ class WebHex {
     Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.useRegex)
     Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.errorsOnly)
     Notify.on("click", evt => this.#handleFilterCriterionClick(evt), this.#elements.warningsOnly)
+    Notify.on("click", () => this.#navigateProblem(-1), this.#elements.previousProblem)
+    Notify.on("click", () => this.#navigateProblem(1), this.#elements.nextProblem)
+    Notify.on("wheel", evt => this.#handleProblemWheel(evt), this.#elements.problems)
 
     // Wunderbar
     this.#setHasFile(false)
@@ -198,6 +202,7 @@ class WebHex {
       }
     }
 
+    this.#currentProblemIndex = -1
     this.#applyFilter()
   }
 
@@ -344,6 +349,7 @@ class WebHex {
       this.#updateWarnings(warningItems)
 
       // Refreshing! Mwah!
+      this.#currentProblemIndex = -1
       this.#disposer.dispose()
       this.#validationElements.clear()
       HTML.clearHTMLContent(container)
@@ -400,6 +406,58 @@ class WebHex {
     } catch(error) {
       console.error(error)
     }
+  }
+
+  #getVisibleProblems() {
+    return Array.from(this.#validationElements.values())
+      .filter(([entry, element]) =>
+        (entry.status === "invalid" || entry.status === "warn") &&
+        !element.classList.contains("hidden")
+      )
+  }
+
+  #wheelCooldown = false
+  #handleProblemWheel(evt) {
+    if(this.#wheelCooldown)
+      return
+
+    evt.preventDefault()
+
+    if(evt.deltaY === 0)
+      return
+
+    this.#navigateProblem(evt.deltaY > 0 ? 1 : -1)
+    this.#wheelCooldown = true
+    setTimeout(() => {
+      this.#wheelCooldown = false
+    }, 200)
+  }
+
+  #navigateProblem(direction) {
+    const problems = this.#getVisibleProblems()
+
+    if(!problems.length)
+      return
+
+    // Remove highlight from previous
+    const idx = this.#currentProblemIndex
+
+    if(idx >= 0 && idx < problems.length)
+      problems[idx]?.[1].classList.remove("focused")
+
+    // Advance index
+    this.#currentProblemIndex += direction
+
+    // Wrap around
+    if(this.#currentProblemIndex >= problems.length)
+      this.#currentProblemIndex = 0
+    else if(this.#currentProblemIndex < 0)
+      this.#currentProblemIndex = problems.length - 1
+
+    const [, element] = problems[this.#currentProblemIndex]
+
+    element.classList.add("focused")
+    element.scrollIntoView({behavior: "smooth", block: "center"})
   }
 
   // Delegate click events for property copy

@@ -351,15 +351,11 @@ export default class HexPanel {
   }
 
   async #jumpToProperty({property}) {
-    // this.#glog.info(`Jumping to property '${property}' in '${this.#selectedFile?.path}'`)
-
     if(!property || !this.#selectedFile)
       return
 
     try {
       const uri = Uri.parse(this.#selectedFile.url)
-      // this.#glog.info("uri = %o", uri)
-
       // openTextDocument returns existing doc if already open, doesn't duplicate
       const doc = await workspace.openTextDocument(uri)
 
@@ -407,8 +403,6 @@ export default class HexPanel {
   }
 
   async #loadThemeContent(force=false) {
-    // this.#glog.info("loadThemeContent")
-
     try {
       // Is file there and also accessible?
       if(!(await this.#selectedFile.exists))
@@ -454,8 +448,6 @@ export default class HexPanel {
   }
 
   async #processMessage(message) {
-    // this.#glog.info(`Received message: %o`, message)
-
     switch(message.type) {
       case "showError":
         message.message
