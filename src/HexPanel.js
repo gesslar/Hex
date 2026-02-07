@@ -159,7 +159,7 @@ export default class HexPanel {
           this.#selectedFileWatcher = null
         }
 
-        const file = new FileObject(resourceUri.path)
+        const file = new FileObject(resourceUri.fsPath)
         this.#selectedFile = file
 
         // Show the webview!
@@ -186,8 +186,13 @@ export default class HexPanel {
     }
 
     try {
+      const pattern = new vscode.RelativePattern(
+        this.#selectedFile.parentPath,
+        this.#selectedFile.name
+      )
+
       this.#selectedFileWatcher = workspace.createFileSystemWatcher(
-        this.#selectedFile.path,
+        pattern,
         true,  // ignore create
         false, // watch change
         false  // watch delete
@@ -509,19 +514,26 @@ export default class HexPanel {
   }
 
   async #exportProblems() {
+    if(!this.#selectedFile)
+      return
+
     const language = "markdown"
     const file = this.#selectedFile
     const cacheKey = file.path
     const validations = this.#validations.get(cacheKey)
+
+    if(!validations)
+      return
+
     const content = validations
       .filter(e => e.status !== "valid")
       .map(e => {
-        return `### \`${e.property}\`\n` +
+        return `### \`${e.property}\``.trimEnd() + "\n" +
                `\n` +
-               `Status: ${e.status}\n` +
-               `Schema description: ${e.description}\n` +
-               `Theme value: ${e.value}\n` +
-               `Error: ${e.message ?? ""}`
+               `Status: ${e.status}`.trimEnd() + "\n" +
+               `Schema description: ${e.description}`.trimEnd() + "\n" +
+               `Theme value: ${e.value}`.trimEnd() + "\n" +
+               `Error: ${e.message ?? ""}`.trimEnd()
       })
 
     content.unshift(`## ${this.#selectedFile.path}`)
@@ -529,7 +541,7 @@ export default class HexPanel {
 
     try {
       const document = await workspace.openTextDocument({
-        content: content.join("\n\n"),
+        content: content.join("\n\n") + "\n",
         language
       })
 
@@ -545,16 +557,24 @@ export default class HexPanel {
   }
 
   async #exportMissing() {
+    if(!this.#selectedFile)
+      return
+
     const language = "markdown"
     const file = this.#selectedFile
     const cacheKey = file.path
-    const validations = this.#validations.get(cacheKey).map(e => e.property)
+    const cached = this.#validations.get(cacheKey)
+
+    if(!cached)
+      return
+
+    const validations = cached.map(e => e.property)
     const schema = this.#schema.map
     const fromMap = Object.fromEntries(schema)
     const properties = Object.keys(fromMap)
     const content = properties
       .filter(e => !validations.includes(e))
-      .map(e => `- \`${e}\` - ${fromMap[e]?.description??""}`)
+      .map(e => (`- \`${e}\` - ${fromMap[e]?.description??""}`).trimEnd())
 
     content.sort()
     const propertyCount = validations.length
@@ -568,7 +588,7 @@ export default class HexPanel {
 
     try {
       const document = await workspace.openTextDocument({
-        content: content.join("\n\n"),
+        content: content.join("\n\n") + "\n",
         language
       })
 
