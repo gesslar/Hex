@@ -8,7 +8,6 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  /* min-height: calc(100vh - 20px); */
   box-sizing: border-box;
   cursor: default;
   user-select: none;
@@ -151,7 +150,6 @@ body {
 
         #filter-text {
           flex: 1;
-          min-width: 100px;
           background: transparent;
           border: none;
           color: var(--vscode-input-foreground);
@@ -305,7 +303,6 @@ body {
     #validationResults {
       flex: 1;
       overflow-y: auto;
-      scrollbar-gutter: stable;
       display: flex;
       flex-direction: column;
     }

@@ -6,7 +6,8 @@
   "publisher": "gesslar",
   "license": "Unlicense",
   "engines": {
-    "vscode": ">=1.104.0"
+    "vscode": ">=1.104.0",
+    "node": ">=24.13.0"
   },
   "repository": {
     "type": "git",
@@ -68,7 +69,11 @@
     }
   },
   "scripts": {
-    "update": "pnpm self-update && pnpx npm-check-updates -u && pnpm install"
+    "update": "pnpm self-update && pnpx npm-check-updates -u && pnpm install",
+    "pr": "gt submit -p --ai",
+    "patch": "pnpm version patch",
+    "minor": "pnpm version minor",
+    "major": "pnpm version major"
   },
   "icon": "hexagon.png",
   "type": "module",
