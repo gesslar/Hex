@@ -1,6 +1,6 @@
 {
-  "name": "hex",
-  "displayName": "Hex",
+  "name": "hex-theme-validator",
+  "displayName": "Hex - VS Code Theme Validator",
   "description": "Because while you may be valid, your theme is questionable.",
   "version": "0.0.1",
   "publisher": "gesslar",
@@ -71,6 +71,8 @@
   "scripts": {
     "update": "pnpm self-update && pnpx npm-check-updates -u && pnpm install",
     "pr": "gt submit -p --ai",
+    "publish:vsce": "bash -e package && xdg-open https://marketplace.visualstudio.com/manage/publishers/gesslar",
+    "publish:ovsx": "bash -e package && xdg-open https://open-vsx.org/user-settings/extensions",
     "patch": "pnpm version patch",
     "minor": "pnpm version minor",
     "major": "pnpm version major"
