@@ -7,7 +7,7 @@ the official VS Code workbench colour schema. It catches format errors, flags
 deprecated properties, and shows how much of the available colour palette your
 theme actually covers.
 
-<video src="Hex.webm" autoplay loop muted></video>
+![Hex](Hex.gif)
 
 ## Features
 
