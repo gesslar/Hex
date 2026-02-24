@@ -90,7 +90,7 @@
     "@gesslar/uglier": "^1.6.2",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@vscode/vsce": "^3.7.1",
-    "eslint": "^10.0.1",
+    "eslint": "^10.0.2",
     "node-resolve": "^1.3.4",
     "rollup": "^4.59.0"
   }
