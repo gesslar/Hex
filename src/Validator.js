@@ -74,13 +74,13 @@ export default class Validator {
             property: key,
             status: isDeprecated ? "warn"
               : validationResult.isValid ? "valid"
-              : "invalid",
+                : "invalid",
             description: propertySchema.description || "No description available",
             value: value,
             message: isDeprecated
               ? propertySchema.deprecationMessage
               : validationResult.isValid ? undefined
-              : validationResult.error
+                : validationResult.error
           })
         } else {
           results.push({
