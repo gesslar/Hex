@@ -9,6 +9,7 @@
     "vscode": ">=1.104.0",
     "node": ">=24.13.0"
   },
+  "packageManager": "npm@11.11.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/gesslar/Hex"
@@ -69,13 +70,15 @@
     }
   },
   "scripts": {
-    "update": "pnpm self-update && pnpx npm-check-updates -u && pnpm install",
+    "update": "npx npm-check-updates -u && npm install",
     "pr": "gt submit -p --ai",
-    "publish:vsce": "bash -e package && xdg-open https://marketplace.visualstudio.com/manage/publishers/gesslar",
-    "publish:ovsx": "bash -e package && xdg-open https://open-vsx.org/user-settings/extensions",
-    "patch": "pnpm version patch",
-    "minor": "pnpm version minor",
-    "major": "pnpm version major"
+    "lint": "eslint src/",
+    "package": "npx @vscode/vsce package --no-dependencies --skip-license -o vsix/",
+    "publish:vsce": "npm run package && xdg-open https://marketplace.visualstudio.com/manage/publishers/gesslar",
+    "publish:ovsx": "npm run package && xdg-open https://open-vsx.org/user-settings/extensions",
+    "patch": "npm version patch",
+    "minor": "npm version minor",
+    "major": "npm version major"
   },
   "icon": "hexagon.png",
   "type": "module",
