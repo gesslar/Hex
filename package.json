@@ -90,7 +90,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
-    "@gesslar/uglier": "^2.0.1",
+    "@gesslar/uglier": "^2.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@vscode/vsce": "^3.7.1",
     "eslint": "^10.0.3",
