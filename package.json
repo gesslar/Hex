@@ -83,7 +83,7 @@
   "icon": "hexagon.png",
   "type": "module",
   "dependencies": {
-    "@gesslar/toolkit": "^4.1.0",
+    "@gesslar/toolkit": "^4.4.0",
     "@vscode/codicons": "^0.0.45",
     "ajv": "^8.18.0",
     "json5": "^2.2.3",
