@@ -85,35 +85,16 @@ Hex expects a JSON file with a top-level `colors` object:
 }
 ```
 
-### Development
-
-Fork the repository and install dependencies:
-
-```bash
-gh repo fork gesslar/Hex
-cd Hex
-pnpm install
-```
-
-Open the project in VS Code and press F5 to launch the Extension Development Host.
-
-Lint with:
-
-```bash
-pnpm exec eslint .
-```
-
 ## License
 
-Hex itself is released into the public domain under the [Unlicense](UNLICENSE.txt).
+`hex-theme-validator` is released into the public domain under the [Unlicense](UNLICENSE.txt).
 
-This extension includes or depends on third-party components under their own
+This package includes or depends on third-party components under their own
 licenses:
 
 | Dependency | License |
 | --- | --- |
+| [@gesslar/toolkit](https://github.com/gesslar/toolkit) | Unlicense |
 | [@vscode/codicons](https://github.com/microsoft/vscode-codicons) | CC-BY-4.0 |
-| [ajv](https://github.com/ajv-validator/ajv) | MIT |
 | [json5](https://github.com/json5/json5) | MIT |
 | [yaml](https://github.com/eemeli/yaml) | ISC |
-| [@gesslar/toolkit](https://github.com/gesslar/toolkit) | Unlicense |
