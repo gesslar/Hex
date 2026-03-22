@@ -1,6 +1,7 @@
 import uglify from "@gesslar/uglier"
 
 export default [
+   {ignores: ["**/vendor/**"]},
   ...uglify({
     with: [
       "lints-js", // default files: ["**/*.{js,mjs,cjs}"]
@@ -8,11 +9,5 @@ export default [
       "vscode-extension", // default files: ["src/**/*.{js,mjs,cjs}"]
       "web", // default files: ["src/**/*.{js,mjs,cjs}"]
     ],
-    overrides: {
-      "lints-js": {ignores: ["src/**/vendor"]},
-      "lints-jsdoc": {ignores: ["src/**/vendor"]},
-      "vscode-extension": {ignores: ["src/**/vendor"]},
-      "web": {ignores: ["src/**/vendor"]},
-    }
   })
 ]
