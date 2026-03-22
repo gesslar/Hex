@@ -1,6 +1,6 @@
 const vscode = acquireVsCodeApi()
 
-import {DisposerClass, HTML, Notify, NotifyClass, Promised, Util} from "./vendor/toolkit-3.31.0.js"
+import {DisposerClass, HTML, Notify, NotifyClass, Promised, Util} from "./vendor/toolkit.esm.js"
 const {setState, getState} = vscode
 
 // eslint-disable-next-line no-unused-vars

@@ -1,3 +1,4 @@
+// @gesslar/toolkit v5.0.1 - ES module bundle
 /**
  * @file Tantrum.js
  *
@@ -330,8 +331,7 @@ class Valid {
   static type(value, type, options) {
     Valid.assert(
       Data.isType(value, type, options),
-      `Invalid type. Expected ${type}, got ${JSON.stringify(value)}`,
-      1,
+      `Invalid type. Expected ${type}, got ${Data.typeOf(value)}`
     );
   }
 
@@ -538,7 +538,35 @@ class Util {
         .map(i => trim ? i.trim() : i)
         .filter(i => trim ? Boolean(i) : true)
         .join("")
-      , flags?.join(""))
+      , flags?.join("")
+    )
+  }
+
+  static semver = {
+    meetsOrExceeds: (supplied, target) => {
+      Valid.type(supplied, "String", {allowEmpty: false});
+      Valid.type(target, "String", {allowEmpty: false});
+
+      const suppliedSemver = supplied.split(".").filter(Boolean).map(Number).filter(e => !isNaN(e));
+      const targetSemver = target.split(".").filter(Boolean).map(Number).filter(e => !isNaN(e));
+
+      Valid.assert(suppliedSemver.length === 3, "Invalid format for supplied semver.");
+      Valid.assert(targetSemver.length === 3, "Invalid format for target semver.");
+
+      if(suppliedSemver[0] < targetSemver[0])
+        return false
+
+      if(suppliedSemver[0] === targetSemver[0]) {
+        if(suppliedSemver[1] < targetSemver[1])
+          return false
+
+        if(suppliedSemver[1] === targetSemver[1])
+          if(suppliedSemver[2] < targetSemver[2])
+            return false
+      }
+
+      return true
+    }
   }
 }
 
@@ -548,20 +576,6 @@ class Util {
  * including arrays, unions, and options.
  */
 
-
-/**
- * Options for creating a new TypeSpec.
- *
- * @typedef {object} TypeSpecOptions
- * @property {string} [delimiter="|"] - The delimiter for union types
- */
-
-/**
- * Options for type validation methods.
- *
- * @typedef {object} TypeValidationOptions
- * @property {boolean} [allowEmpty=true] - Whether empty values are allowed
- */
 
 /**
  * Type specification class for parsing and validating complex type definitions.
@@ -574,11 +588,10 @@ class TypeSpec {
    * Creates a new TypeSpec instance.
    *
    * @param {string} string - The type specification string (e.g., "string|number", "object[]")
-   * @param {TypeSpecOptions} [options] - Additional parsing options
    */
-  constructor(string, options) {
+  constructor(string) {
     this.#specs = [];
-    this.#parse(string, options);
+    this.#parse(string);
     Object.freeze(this.#specs);
     this.specs = this.#specs;
     this.length = this.#specs.length;
@@ -592,11 +605,21 @@ class TypeSpec {
    * @returns {string} The type specification as a string (e.g., "string|number[]")
    */
   toString() {
-    return this.#specs
-      .map(spec => {
-        return `${spec.typeName}${spec.array ? "[]" : ""}`
-      })
-      .join("|")
+    // Reconstruct in parse order, grouping consecutive mixed specs
+    const parts = [];
+    const emittedGroups = new Set();
+
+    for(const spec of this.#specs) {
+      if(spec.mixed === false) {
+        parts.push(`${spec.typeName}${spec.array ? "[]" : ""}`);
+      } else if(!emittedGroups.has(spec.mixed)) {
+        emittedGroups.add(spec.mixed);
+        const group = this.#specs.filter(s => s.mixed === spec.mixed);
+        parts.push(`(${group.map(s => s.typeName).join("|")})[]`);
+      }
+    }
+
+    return parts.join("|")
   }
 
   /**
@@ -688,7 +711,7 @@ class TypeSpec {
    * Handles array types, union types, and empty value validation.
    *
    * @param {unknown} value - The value to test against the type specifications
-   * @param {TypeValidationOptions} [options] - Validation options
+   * @param {TypeMatchOptions} [options] - Validation options
    * @returns {boolean} True if the value matches any type specification
    */
   matches(value, options) {
@@ -696,14 +719,22 @@ class TypeSpec {
   }
 
   /**
+   * Options that can be passed to {@link TypeSpec.match}
+   *
+   * @typedef {object} TypeMatchOptions
+   * @property {boolean} [allowEmpty=true] - Permit a spec of {@link Data.emptyableTypes} to be empty
+   */
+
+  /**
    * Returns matching type specifications for a value.
    *
    * @param {unknown} value - The value to test against the type specifications
-   * @param {TypeValidationOptions} [options] - Validation options
+   * @param {TypeMatchOptions} [options] - Validation options
    * @returns {Array<object>} Array of matching type specifications
    */
-  match(value, options) {
-    const allowEmpty = options?.allowEmpty ?? true;
+  match(value, {
+    allowEmpty = true,
+  } = {}) {
 
     // If we have a list of types, because the string was validly parsed, we
     // need to ensure that all of the types that were parsed are valid types in
@@ -719,10 +750,13 @@ class TypeSpec {
     // We need to ensure that we match the type and the consistency of the
     // types in an array, if it is an array and an array is allowed.
     const matchingTypeSpec = this.filter(spec => {
+      // Skip mixed specs — they are handled in the grouped-array check below
+      if(spec.mixed !== false)
+        return false
+
       const {typeName: allowedType, array: allowedArray} = spec;
-      const empty =
-        Data.emptyableTypes.includes(allowedType) &&
-        Data.isEmpty(value);
+      const empty = Data.emptyableTypes.includes(allowedType)
+        && Data.isEmpty(value);
 
       // Handle non-array values
       if(!isArray && !allowedArray) {
@@ -762,6 +796,41 @@ class TypeSpec {
       return false
     });
 
+    // Check mixed-array groups independently. Each group (e.g.,
+    // (String|Number)[] vs (Boolean|Bigint)[]) is validated separately
+    // so that multiple groups don't merge into one.
+    if(isArray) {
+      const mixedSpecs = this.filter(spec => spec.mixed !== false);
+
+      if(mixedSpecs.length) {
+        const empty = Data.isEmpty(value);
+
+        if(empty)
+          return allowEmpty ? [...matchingTypeSpec, ...mixedSpecs] : []
+
+        // Collect unique group IDs
+        const groups = [...new Set(mixedSpecs.map(s => s.mixed))];
+
+        for(const gid of groups) {
+          const groupSpecs = mixedSpecs.filter(s => s.mixed === gid);
+
+          const allMatch = value.every(element => {
+            const elType = Data.typeOf(element);
+
+            return groupSpecs.some(spec => {
+              if(spec.typeName === "Object")
+                return Data.isPlainObject(element)
+
+              return elType === spec.typeName
+            })
+          });
+
+          if(allMatch)
+            return [...matchingTypeSpec, ...groupSpecs]
+        }
+      }
+    }
+
     return matchingTypeSpec
   }
 
@@ -771,29 +840,64 @@ class TypeSpec {
    *
    * @private
    * @param {string} string - The type specification string to parse
-   * @param {TypeSpecOptions} [options] - Parsing options
    * @throws {Sass} If the type specification is invalid
    */
-  #parse(string, options={delimiter: "|"}) {
-    const delimiter = options?.delimiter ?? "|";
-    const parts = string.split(delimiter);
+  #parse(string) {
+    const specs = [];
+    const groupPattern = /\((\w+(?:\|\w+)*)\)\[\]/g;
 
-    this.#specs = parts.map(part => {
-      const typeMatches = /^(\w+)(\[\])?$/.exec(part);
+    // Replace groups with placeholder X to validate structure and
+    // determine parse order
+    const groups = [];
+    const stripped = string.replace(groupPattern, (_, inner) => {
+      groups.push(inner);
+
+      return "X"
+    });
+
+    // Validate for malformed delimiters and missing boundaries
+    if(/\|\||^\||\|$/.test(stripped) || /[^|]X|X[^|]/.test(stripped))
+      throw Sass.new(`Invalid type: ${string}`)
+
+    // Parse in order using the stripped template
+    const segments = stripped.split("|");
+    let groupId = 0;
+
+    for(const segment of segments) {
+      if(segment === "X") {
+        const currentGroup = groupId++;
+        const inner = groups[currentGroup];
+
+        for(const raw of inner.split("|")) {
+          const typeName = Util.capitalize(raw);
+
+          if(!Data.isValidType(typeName))
+            throw Sass.new(`Invalid type: ${raw}`)
+
+          specs.push({typeName, array: true, mixed: currentGroup});
+        }
+
+        continue
+      }
+
+      const typeMatches = /^(\w+)(\[\])?$/.exec(segment);
 
       if(!typeMatches || typeMatches.length !== 3)
-        throw Sass.new(`Invalid type: ${part}`)
+        throw Sass.new(`Invalid type: ${segment}`)
 
       const typeName = Util.capitalize(typeMatches[1]);
 
       if(!Data.isValidType(typeName))
         throw Sass.new(`Invalid type: ${typeMatches[1]}`)
 
-      return {
+      specs.push({
         typeName,
         array: typeMatches[2] === "[]",
-      }
-    });
+        mixed: false,
+      });
+    }
+
+    this.#specs = specs;
   }
 
   #getTypeLineage(value) {
@@ -1015,11 +1119,10 @@ class Data {
    * defining the type of a value and whether an array is expected.
    *
    * @param {string} string - The string to parse into a type spec.
-   * @param {TypeSpecOptions} [options] - Additional options for parsing.
-   * @returns {Array<object>} An array of type specs.
+   * @returns {TypeSpec} A new TypeSpec instance.
    */
-  static newTypeSpec(string, options) {
-    return new TypeSpec(string, options)
+  static newTypeSpec(string) {
+    return new TypeSpec(string)
   }
 
   /**
@@ -1066,15 +1169,6 @@ class Data {
     if(!Data.isValidType(type))
       return false
 
-    // We gotta do classes up front. Ugh.
-    if(/^[Cc]lass$/.test(type)) {
-      if(typeof value === "function" &&
-      value.prototype &&
-      value.prototype.constructor === value)
-
-        return true
-    }
-
     const valueType = Data.typeOf(value);
 
     // Special cases that need extra validation
@@ -1087,7 +1181,8 @@ class Data {
   }
 
   /**
-   * Returns the type of a value, whether it be a primitive, object, or function.
+   * Returns the type of a value, whether it be a primitive, object, or
+   * function.
    *
    * @param {unknown} value - The value to check
    * @returns {string} The type of the value
@@ -1100,6 +1195,12 @@ class Data {
 
     if(type === "object")
       return value.constructor?.name ?? "Object"
+
+    if(typeof value === "function"
+      && Object.getOwnPropertyDescriptor(value, "prototype")?.writable === false
+      && /^class[\s{]/.test(Function.prototype.toString.call(value))) {
+      return "Class"
+    }
 
     const [first, ...rest] = Array.from(type);
 
@@ -1348,6 +1449,7 @@ class Data {
              Data.isType(value, "ArrayBuffer|Blob|Buffer")
            )
   }
+
 }
 
 /**
@@ -1563,9 +1665,8 @@ class Collection {
     Valid.type(arr, req, `Invalid array. Expected '${req}', got '${arrType}'`);
 
     // Validate type parameter if provided
-    if(type !== undefined) {
+    if(type !== undefined)
       Valid.type(type, "string", `Invalid type parameter. Expected 'string', got '${Data.typeOf(type)}'`);
-    }
 
     const checkType = type ? Util.capitalize(type) : Data.typeOf(arr[0]);
 
@@ -2032,6 +2133,62 @@ class Collection {
     const flattened = Array.isArray(input) ? input.flat() : input;
 
     return Collection.transposeObjects(flattened)
+  }
+
+  /**
+   * Computes the structured difference between two objects.
+   * Returns an object with three keys: `added`, `removed`, and `changed`.
+   * Nested objects are recursed into, producing the same structure.
+   * Primitive changes are represented as `{from, to}` pairs.
+   *
+   * @param {object|Array<unknown>} original - The original object or array to compare from
+   * @param {object|Array<unknown>} updated - The updated object or array to compare against
+   * @returns {{added: object, removed: object, changed: object}} Structured diff.
+   *   `added` contains keys new in `updated` with their new values.
+   *   `removed` contains keys absent from `updated` with their old values.
+   *   `changed` contains keys present in both but with different values;
+   *   primitives are `{from, to}` pairs, nested objects recurse.
+   *   All three keys are always present, empty when there are no differences.
+   */
+  static diff(original, updated) {
+    const added = {};
+    const removed = {};
+    const changed = {};
+
+    for(const key of Object.keys(updated)) {
+      Valid.prototypePollutionProtection([key]);
+
+      if(!Object.hasOwn(original, key)) {
+        added[key] = updated[key];
+      } else if(!Object.is(original[key], updated[key])) {
+        if(
+          (Data.isPlainObject(original[key]) &&
+            Data.isPlainObject(updated[key])) ||
+          (Array.isArray(original[key]) && Array.isArray(updated[key]))
+        ) {
+          const nested = Collection.diff(original[key], updated[key]);
+          const hasChanges =
+            Object.keys(nested.added).length > 0 ||
+            Object.keys(nested.removed).length > 0 ||
+            Object.keys(nested.changed).length > 0;
+
+          if(hasChanges)
+            changed[key] = nested;
+
+        } else {
+          changed[key] = {from: original[key], to: updated[key]};
+        }
+      }
+    }
+
+    for(const key of Object.keys(original)) {
+      Valid.prototypePollutionProtection([key]);
+
+      if(!Object.hasOwn(updated, key))
+        removed[key] = original[key];
+    }
+
+    return {added, removed, changed}
   }
 }
 
@@ -3764,9 +3921,9 @@ class HTML {
 var HTML_default = new HTML();
 
 /**
- * Thin wrapper around `window` event handling to centralize emit/on/off
- * helpers. Used to dispatch simple CustomEvents and manage listeners in one
- * place.
+ * Thin wrapper around event dispatching to centralize emit/on/off helpers.
+ * Uses `globalThis` for safe resolution in server-side build environments
+ * (e.g. esm.sh) while defaulting to `window` at runtime.
  */
 
 /**
@@ -3780,6 +3937,15 @@ class Notify {
   name = "Notify"
 
   /**
+   * Returns the default event target (window or globalThis).
+   *
+   * @returns {EventTarget} The default event target.
+   */
+  get #target() {
+    return globalThis.window ?? globalThis
+  }
+
+  /**
    * Emits a CustomEvent without expecting a return value.
    *
    * @param {string} type - Event name to dispatch.
@@ -3789,7 +3955,7 @@ class Notify {
    */
   emit(type, payload=undefined, options=undefined) {
     const evt = new CustomEvent(type, this.#buildEventInit(payload, options));
-    window.dispatchEvent(evt);
+    this.#target.dispatchEvent(evt);
   }
 
   /**
@@ -3802,46 +3968,55 @@ class Notify {
    */
   request(type, payload={}, options=undefined) {
     const evt = new CustomEvent(type, this.#buildEventInit(payload, options));
-    window.dispatchEvent(evt);
+    this.#target.dispatchEvent(evt);
 
     return evt.detail
   }
 
   /**
-   * Registers a listener for the given event type on an HTMLElement (or
-   * window, if not specified).
+   * Registers a listener for the given event type on an EventTarget.
+   * Defaults to window when no element is provided.
    *
    * @param {string} type - Event name to listen for.
-   * @param {(evt: Notify) => void} handler - Listener callback.
-   * @param {HTMLElement | Window} [element] - The object to which to attach the handler. Default is window.
+   * @param {(evt: Event) => void} handler - Listener callback.
+   * @param {EventTarget} [element] - The target to attach the handler to. Defaults to window.
    * @param {boolean | object} [options] - Options to pass to addEventListener.
    * @returns {() => void} Dispose function to unregister the handler.
    */
-  on(type, handler, element=window, options=undefined) {
+  on(type, handler, element=undefined, options=undefined) {
     if(!(typeof type === "string" && type))
       throw new Error("No event 'type' specified to listen for.")
 
     if(typeof handler !== "function")
       throw new Error("No handler function specified.")
 
-    element.addEventListener(type, handler, options);
+    const target = element ?? this.#target;
+    target.addEventListener(type, handler, options);
 
-    return () => this.off(type, handler, element, options)
+    return () => this.off(type, handler, target, options)
   }
 
   /**
    * Removes a previously registered listener for the given event type.
    *
    * @param {string} type - Event name to remove.
-   * @param {(evt: Notify) => void} handler - Listener callback to detach.
-   * @param {HTMLElement | Window} [element] - The object from which to remove the handler. Default is window.
+   * @param {(evt: Event) => void} handler - Listener callback to detach.
+   * @param {EventTarget} [element] - The target to remove the handler from. Defaults to window.
    * @param {boolean | object} [options] - Options to pass to removeEventListener.
    * @returns {void}
    */
-  off(type, handler, element=window, options=undefined) {
-    element.removeEventListener(type, handler, options);
+  off(type, handler, element=undefined, options=undefined) {
+    const target = element ?? this.#target;
+    target.removeEventListener(type, handler, options);
   }
 
+  /**
+   * Builds the CustomEvent init object from detail and options.
+   *
+   * @param {unknown} detail - The event detail payload.
+   * @param {boolean | NotifyEventOptions} [options] - Event options.
+   * @returns {object} The event init object.
+   */
   #buildEventInit(detail, options) {
     if(typeof options === "boolean")
       return {detail, bubbles: options}
@@ -3995,29 +4170,45 @@ class Time {
    * The returned promise includes a timerId property that can be used with cancel().
    *
    * @param {number} delay - Delay in milliseconds before resolving (must be >= 0)
-   * @param {unknown} [value] - Optional value to resolve with after the delay
-   * @returns {Promise<unknown> & {timerId: number}} Promise that resolves with the value after delay, extended with timerId property
+   * @param {unknown} [value] - Optional value to resolve with, or a function to invoke after the delay
+   * @returns {Promise<unknown> & {timerId: number}} Promise that resolves with the value (or function result) after delay, extended with timerId property
    * @throws {Sass} If delay is not a number or is negative
    * @example
    * // Wait 1 second then continue
    * await Time.after(1000)
    *
-   * // Wait 1 second then get a value
-   * const result = await Time.after(1000, 'done')
+   * // Debounce: only apply the latest input after the user stops typing
+   * let pending = null
+   * function onInput(text) {
+   *   Time.cancel(pending) // cancel() is a no-op if not a valid Time promise.
+   *   pending = Time.after(300, () => applySearch(text))
+   * }
    *
-   * // Create a cancellable delay
-   * const promise = Time.after(5000, 'data')
-   * Time.cancel(promise) // Cancel before it resolves
+   * // Timeout a fetch request
+   * const result = await Promise.race([
+   *   fetch("/api/data"),
+   *   Time.after(5000, () => { throw new Error("Request timed out") })
+   * ])
+   *
+   * // Cancellable delay
+   * const promise = Time.after(5000, "data")
+   * Time.cancel(promise) // Prevents resolution
    */
   static after(delay, value) {
     Valid.type(delay, "Number", "delay");
     Valid.assert(delay >= 0, "delay must be non-negative", delay);
 
     let timerId;
-    const promise = new Promise(resolve => {
+    const promise = new Promise((resolve, reject) => {
       // Cap at max 32-bit signed integer to avoid Node.js timeout overflow warning
       const safeDelay = Math.min(delay, 2147483647);
-      timerId = setTimeout(() => resolve(value), safeDelay);
+      timerId = setTimeout(() => {
+        try {
+          resolve(Data.isType(value, "Function") ? value() : value);
+        } catch(e) {
+          reject(e);
+        }
+      }, safeDelay);
     });
     promise.timerId = timerId;
 
