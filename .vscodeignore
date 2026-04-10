@@ -1,3 +1,7 @@
+node_modules/
+fixtures/
+esbuild.config.js
+output/
 *.vsix
 temp/
 work/
@@ -6,5 +10,9 @@ work/
 temp/
 pnpm-*
 .*
-
 .*/**/*
+vsix/
+scripts/
+AGENTS.md
+WARP.md
+jsconfig.json

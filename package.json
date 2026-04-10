@@ -2,9 +2,9 @@
   "name": "hex-theme-validator",
   "displayName": "Hex - VS Code Theme Validator",
   "description": "Because while you may be valid, your theme is questionable.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "gesslar",
-  "license": "Unlicense",
+  "license": "0BSD",
   "engines": {
     "vscode": ">=1.104.0",
     "node": ">=24.13.0"
@@ -70,6 +70,9 @@
     }
   },
   "scripts": {
+    "build": "node esbuild.config.js --production",
+    "build:dev": "node esbuild.config.js",
+    "build:watch": "node esbuild.config.js --watch",
     "update": "npx npm-check-updates -u && npm install",
     "pr": "gt submit -p --ai",
     "lint": "eslint src/",
@@ -86,7 +89,6 @@
   "dependencies": {
     "@gesslar/toolkit": "^5.0.1",
     "@vscode/codicons": "^0.0.45",
-    "ajv": "^8.18.0",
     "json5": "^2.2.3",
     "yaml": "^2.8.3"
   },
@@ -94,8 +96,7 @@
     "@gesslar/uglier": "^2.4.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@vscode/vsce": "^3.7.1",
-    "eslint": "^10.2.0",
-    "node-resolve": "^1.3.4",
-    "rollup": "^4.60.1"
+    "esbuild": "^0.28.0",
+    "eslint": "^10.2.0"
   }
 }

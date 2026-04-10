@@ -6,3 +6,5 @@ temp/
 .vscode/
 work/
 .claude/
+src/extension.mjs
+src/extension.mjs.map
