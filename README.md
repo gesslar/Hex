@@ -87,14 +87,14 @@ Hex expects a JSON file with a top-level `colors` object:
 
 ## License
 
-`hex-theme-validator` is released into the public domain under the [Unlicense](UNLICENSE.txt).
+`hex-theme-validator` is released into the public domain under the [0BSD](LICENSE.txt).
 
 This package includes or depends on third-party components under their own
 licenses:
 
 | Dependency | License |
 | --- | --- |
-| [@gesslar/toolkit](https://github.com/gesslar/toolkit) | Unlicense |
+| [@gesslar/toolkit](https://github.com/gesslar/toolkit) | 0BSD |
 | [@vscode/codicons](https://github.com/microsoft/vscode-codicons) | CC-BY-4.0 |
 | [json5](https://github.com/json5/json5) | MIT |
 | [yaml](https://github.com/eemeli/yaml) | ISC |
