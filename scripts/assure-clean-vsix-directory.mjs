@@ -6,15 +6,13 @@
  * built package.
  *
  * Usage:
- *   node scripts/clean-vsix.js [dir]
- *
- * If [dir] is omitted, defaults to "vsix/" relative to cwd.
+ *   node scripts/assure-clean-vsix-directory.mjs
  */
 
 import {existsSync, mkdirSync, readdirSync, statSync, unlinkSync} from "node:fs"
-import {join, resolve} from "node:path"
+import {join} from "node:path"
 
-const dir = resolve(process.argv[2] || "vsix")
+const dir = "vsix"
 
 try {
   if(existsSync(dir)) {
@@ -26,15 +24,15 @@ try {
     }
   } else {
     mkdirSync(dir)
+
+    const vsixFiles = readdirSync(dir).filter(f => f.endsWith(".vsix"))
+
+    for(const file of vsixFiles) {
+      console.log(`Removing ${file}`)
+      unlinkSync(join(dir, file))
+    }
   }
 } catch(error) {
-  console.error(`Donde estan los gatos negros? upsidedownexclamationmarkEn los arboles! También, ${error.message}`)
+  console.error(error)
   process.exit(1)
-}
-
-const vsixFiles = readdirSync(dir).filter(f => f.endsWith(".vsix"))
-
-for(const file of vsixFiles) {
-  console.log(`Removing ${file}`)
-  unlinkSync(join(dir, file))
 }
