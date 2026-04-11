@@ -27,7 +27,8 @@ try {
   } else {
     mkdirSync(dir)
   }
-} catch {
+} catch(error) {
+  console.error(`Donde estan los gatos negros? upsidedownexclamationmarkEn los arboles! También, ${error.message}`)
   process.exit(1)
 }
 
