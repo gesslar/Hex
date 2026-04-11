@@ -87,7 +87,7 @@ Hex expects a JSON file with a top-level `colors` object:
 
 ## License
 
-`hex-theme-validator` is released into the public domain under the [0BSD](LICENSE.txt).
+`hex-theme-validator` is released under the [0BSD](LICENSE.txt).
 
 This package includes or depends on third-party components under their own
 licenses:
