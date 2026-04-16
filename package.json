@@ -94,7 +94,7 @@
   "devDependencies": {
     "@gesslar/uglier": "^2.4.1",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@vscode/vsce": "^3.8.0",
+    "@vscode/vsce": "^3.9.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.2.0"
   }
