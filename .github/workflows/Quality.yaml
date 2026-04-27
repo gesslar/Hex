@@ -3,11 +3,9 @@ name: Quality
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
-  schedule:
-    - cron: "20 14 * * 1"
+    branches: [ main ]
 
 jobs:
   Quality:

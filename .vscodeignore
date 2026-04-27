@@ -16,3 +16,8 @@ scripts/
 AGENTS.md
 WARP.md
 jsconfig.json
+src/Hex.js
+src/HexCommands.js
+src/HexPanel.js
+src/Validator.js
+src/VSCodeSchema.js

@@ -11,7 +11,7 @@ let esm
  */
 async function ensureESM() {
   if(!esm)
-    esm = await import("./Hex.js")
+    esm = await import("./extension.mjs")
 
   return esm
 }
