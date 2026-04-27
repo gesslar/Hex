@@ -14,8 +14,8 @@ const $resources = {
     directory: ["src", "webview"]
   },
   codicons: {
-    directory: ["node_modules", "@vscode", "codicons", "dist"],
-    file: ["node_modules", "@vscode", "codicons", "dist", "codicon.css"],
+    directory: ["src", "webview", "vendor", "codicons"],
+    file: ["src", "webview", "vendor", "codicons", "codicon.css"],
   }
 }
 
