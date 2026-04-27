@@ -2,7 +2,7 @@
   "name": "hex-theme-validator",
   "displayName": "Hex - VS Code Theme Validator",
   "description": "Because while you may be valid, your theme is questionable.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "gesslar",
   "license": "0BSD",
   "engines": {
