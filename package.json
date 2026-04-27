@@ -2,11 +2,11 @@
   "name": "hex-theme-validator",
   "displayName": "Hex - VS Code Theme Validator",
   "description": "Because while you may be valid, your theme is questionable.",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "publisher": "gesslar",
   "license": "0BSD",
   "engines": {
-    "vscode": ">=1.104.0",
+    "vscode": "^1.116.0",
     "node": ">=24.11.0"
   },
   "repository": {
@@ -94,7 +94,7 @@
   "devDependencies": {
     "@gesslar/uglier": "^2.4.1",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@vscode/vsce": "^3.9.1",
+    "@vscode/vsce": "^2.25.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.2.1"
   }
