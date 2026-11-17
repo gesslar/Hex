@@ -96,6 +96,6 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@vscode/vsce": "^4.1.1",
     "esbuild": "^0.28.2",
-    "eslint": "^10.14.0"
+    "eslint": "^10.15.0"
   }
 }
